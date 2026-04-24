@@ -75,5 +75,52 @@ jobs:
       - name: Run full test suite
         run: python tests/test_all.py
 
-  # API server smoke test temporarily removed — arn.api module being ported to v1.0 structure
-  # Will be re-added in next release
+  api-smoke:
+    name: API server smoke test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache HuggingFace models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-cache-${{ runner.os }}-minilm-v1
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[api]"
+
+      - name: Start API server and run smoke test
+        run: |
+          python -m uvicorn arn.api.server:app --host 127.0.0.1 --port 8742 &
+          SERVER_PID=$!
+          sleep 25
+
+          curl -sf http://127.0.0.1:8742/v1/health | python -m json.tool
+
+          curl -sf -X POST http://127.0.0.1:8742/v1/memory/store \
+            -H "Content-Type: application/json" \
+            -d '{"agent_id":"ci","content":"CI test fact","importance":0.5}' \
+            | python -m json.tool
+
+          RESULT=$(curl -sf -X POST http://127.0.0.1:8742/v1/memory/recall \
+            -H "Content-Type: application/json" \
+            -d '{"agent_id":"ci","query":"CI test","top_k":1}')
+          echo "$RESULT" | python -m json.tool
+
+          echo "$RESULT" | python -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          assert 'CI test' in d['results'][0]['content'], 'Recall did not find stored fact'
+          print('OK: store/recall round-trip works')
+          "
+
+          kill $SERVER_PID 2>/dev/null || true

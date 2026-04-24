@@ -51,3 +51,6 @@ arn = "arn.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["arn*"]
+
+[tool.setuptools.package-data]
+arn = ["openclaw_skill/SKILL.md"]

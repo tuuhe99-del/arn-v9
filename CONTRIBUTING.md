@@ -17,8 +17,8 @@ This is a student project. I'm not a seasoned maintainer and response times will
 1. Fork the repo
 2. Make a branch named something descriptive (`fix/vec-index-collision`, `feat/multilingual-embeddings`)
 3. Write or update tests for your change
-4. Run the test suite: `python arn_v9/tests/test_all.py`
-5. Run the stress test if your change touches memory behavior: `python arn_v9/benchmarks/stress_test.py nano`
+4. Run the test suite: `python tests/test_all.py`
+5. Run the stress test if your change touches memory behavior: `python -m pytest tests/ -v  # or: python arn/benchmarks/stress_test.py nano`
 6. Open the PR
 
 ## Code style
