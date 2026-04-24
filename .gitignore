@@ -1,0 +1,30 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.env
+*.env
+.venv/
+venv/
+env/
+
+# ARN data — never commit memory files
+*.db
+*.db-wal
+*.db-shm
+*.npy
+*.memmap
+.arn_data/
+
+# Test artifacts
+/tmp/
+.pytest_cache/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp

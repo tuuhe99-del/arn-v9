@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arn"
+version = "1.0.0"
+description = "Brain-inspired persistent memory for AI agents. Local, free, Pi-compatible."
+readme = "README.md"
+license = {file = "LICENSE.md"}
+authors = [
+    {name = "Mohamed Mohamed"}
+]
+keywords = ["ai", "agents", "memory", "embeddings", "cognitive", "neuroscience", "ocplatform", "langchain", "rag", "local"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24.0",
+    "sentence-transformers>=2.2.0",
+]
+
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+    "pydantic>=2.0.0",
+]
+langchain = [
+    "langchain>=0.1.0",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/tuuhe99-del/arn-v9"
+Issues = "https://github.com/tuuhe99-del/arn-v9/issues"
+
+[project.scripts]
+arn = "arn.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["arn*"]
