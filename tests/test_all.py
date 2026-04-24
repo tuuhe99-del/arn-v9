@@ -36,9 +36,9 @@ import numpy as np
 # Add parent to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from arn_v9.core.embeddings import EmbeddingEngine, EMBEDDING_DIM
-from arn_v9.storage.persistence import StorageEngine
-from arn_v9.core.cognitive import (
+from arn.core.embeddings import EmbeddingEngine, EMBEDDING_DIM
+from arn.storage.persistence import StorageEngine
+from arn.core.cognitive import (
     ARNv9, DomainColumn, DomainType, WorkingMemory, ConsolidationEngine
 )
 

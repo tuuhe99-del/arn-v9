@@ -6,7 +6,7 @@ Run this BEFORE the test suite to verify the environment is ready.
 Checks Python version, dependencies, model availability, and disk space.
 
 Usage:
-    python3 arn_v9/tests/check_env.py
+    python3 arn/tests/check_env.py
 
 Exit codes:
     0 = ready for full 44/44 test suite
@@ -72,7 +72,7 @@ def check():
     # Model availability
     model_loaded = False
     try:
-        from arn_v9.core.embeddings import EmbeddingEngine
+        from arn.core.embeddings import EmbeddingEngine
         engine = EmbeddingEngine(use_model=True)
         if not engine.is_degraded:
             import numpy as np
@@ -88,13 +88,13 @@ def check():
         warnings.append(f"Embedding model error: {e}")
         print(f"  ⚠ Embedding model error: {e}")
 
-    # arn_v9 package
+    # arn package
     try:
-        from arn_v9 import ARNv9
-        print(f"  ✓ arn_v9 package importable")
+        from arn import ARNv9
+        print(f"  ✓ arn package importable")
     except ImportError as e:
-        errors.append(f"arn_v9 import failed: {e}")
-        print(f"  ✗ arn_v9 import failed: {e}")
+        errors.append(f"arn import failed: {e}")
+        print(f"  ✗ arn import failed: {e}")
 
     # Disk space
     try:

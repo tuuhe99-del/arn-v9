@@ -22,8 +22,8 @@ import os
 import json
 import argparse
 
-# Ensure arn_v9 package is importable
-# Try: parent of the script's grandparent (arn_v9/scripts/ → arn_v9/ → parent)
+# Ensure arn package is importable
+# Try: parent of the script's grandparent (arn/scripts/ → arn_v9/ → parent)
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 _package_dir = os.path.dirname(os.path.dirname(_script_dir))
 sys.path.insert(0, _package_dir)
@@ -75,8 +75,8 @@ def get_plugin(strict: bool = False):
 def cmd_perceive(args):
     """Passively absorb text — auto-detects importance, never stores credentials."""
     import sys as _sys
-    _sys.path.insert(0, '/home/mokali/arn_v9')
-    from arn_v9.memory_llm import detect_importance, detect_time_context
+    _sys.path.insert(0, '/home/mokali/arn')
+    from arn.memory_llm import detect_importance, detect_time_context
     importance = detect_importance(args.content)
     if importance == 0.0:
         print(json.dumps({"stored": False, "reason": "credential pattern detected — not stored"}))
