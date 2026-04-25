@@ -28,6 +28,18 @@ from typing import List, Optional, Union
 import hashlib
 import logging
 
+# Suppress noisy HuggingFace/safetensors warnings before any ML imports
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+os.environ['HF_HUB_DISABLE_PROGRESS_BARS'] = '1'
+os.environ['SAFETENSORS_FAST_GPU'] = '0'
+import warnings as _w
+_w.filterwarnings('ignore', message='.*Unauthenticated.*')
+_w.filterwarnings('ignore', message='.*huggingface.*')
+_w.filterwarnings('ignore', category=FutureWarning)
+for _name in ('sentence_transformers', 'transformers', 'huggingface_hub', 
+              'safetensors', 'huggingface_hub.utils'):
+    logging.getLogger(_name).setLevel(logging.ERROR)
+
 logger = logging.getLogger("arn.embeddings")
 
 
@@ -143,12 +155,49 @@ class EmbeddingEngine:
     def _load_model(self):
         """Lazy-load the configured sentence transformer model."""
         try:
+            # Suppress noisy HuggingFace warnings that alarm non-technical users
+            import warnings
+            import os
+            os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+            warnings.filterwarnings('ignore', message='.*Unauthenticated.*')
+            warnings.filterwarnings('ignore', message='.*huggingface.*')
+            
+            import logging as _log
+            for noisy in ('sentence_transformers', 'transformers', 
+                         'huggingface_hub', 'safetensors'):
+                _log.getLogger(noisy).setLevel(_log.ERROR)
+            
             from sentence_transformers import SentenceTransformer
             logger.info(f"Loading embedding model ({self._tier}): {self._config['name']}")
-            self._model = SentenceTransformer(
-                self._config['name'],
-                device='cpu'
-            )
+            
+            # Suppress ALL model-load noise including C-level stderr writes
+            # from safetensors (BertModel LOAD REPORT). Python-level redirects
+            # don't catch these because they write to the raw fd, not sys.stderr.
+            import sys
+            _old_out, _old_err = sys.stdout, sys.stderr
+            _devnull = os.open(os.devnull, os.O_WRONLY)
+            _old_stderr_fd = os.dup(2)
+            _old_stdout_fd = os.dup(1)
+            os.dup2(_devnull, 2)
+            os.dup2(_devnull, 1)
+            sys.stdout = open(os.devnull, 'w')
+            sys.stderr = open(os.devnull, 'w')
+            try:
+                self._model = SentenceTransformer(
+                    self._config['name'],
+                    device='cpu'
+                )
+            finally:
+                # Restore everything
+                sys.stdout.close()
+                sys.stderr.close()
+                os.dup2(_old_stderr_fd, 2)
+                os.dup2(_old_stdout_fd, 1)
+                os.close(_devnull)
+                os.close(_old_stderr_fd)
+                os.close(_old_stdout_fd)
+                sys.stdout = _old_out
+                sys.stderr = _old_err
             logger.info(
                 f"Loaded {self._tier} model — dim={self._config['dim']}, "
                 f"~{self._config['approx_ram_mb']}MB RAM"

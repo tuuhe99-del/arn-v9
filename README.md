@@ -1,392 +1,312 @@
-# ARN — Adaptive Reasoning Network
+# ARN v9 — Adaptive Reasoning Network
 
-**Persistent memory for AI agents. Local. Free. Works on a Raspberry Pi.**
+Brain-inspired persistent memory for AI agents. Runs locally, costs $0/month, fits in under 50MB on a Raspberry Pi 5.
 
-Your AI agent forgets everything between sessions. ARN fixes that — it remembers facts, preferences, decisions, and past conversations across restarts, without sending anything to the cloud.
+Hi, I'm Mohamed. I'm a student at Columbus State Community College studying IT, and I built this because I wanted my AI agents to actually remember things between sessions without paying for a cloud service. It started as a side project on my Pi 5 and turned into something I think is worth sharing.
 
----
+If you're building agents with OpenClaw, LangChain, or any framework where you keep re-explaining context to your agent every session, this might help.
 
-## Install in two commands
+## What it does
+
+Your agent stores facts, the system remembers them across sessions, and when the agent needs context it gets back the relevant stuff — not by keyword match but by meaning. Ask "what does the user like to code in?" after storing "Mohamed prefers Python" and you get the Python answer back, even though "like" and "code" don't appear in the stored fact.
+
+Under the hood it's a combination of things from neuroscience and ML:
+
+- **Episodic + semantic split** — like hippocampus vs neocortex. Recent stuff is stored as specific episodes, repeated patterns get consolidated into general knowledge
+- **Sentence embeddings** — using all-MiniLM-L6-v2 (22MB) by default, with optional upgrades to bge-base (440MB) if you want higher quality
+- **Cortical column voting** — 8 domain-specialized columns (code, conversation, facts, errors, etc.) that each evaluate incoming info
+- **Calibrated prediction error** — tracks what counts as "surprising" per domain using Welford's algorithm, so truly novel info gets prioritized
+- **Consolidation** — periodically clusters similar episodes into semantic memories (like what happens during sleep)
+- **Contradiction detection** — when new info conflicts with stored info, it flags the conflict and keeps both with timestamps
+- **Explicit temporal tagging** — because embeddings alone can't tell "used to prefer X" from "currently prefers Y", you can tag episodes with `time_context='past'|'current'|'future'`
+
+## What it passes
+
+Full results from the adversarial stress test (`benchmarks/stress_test.py`):
+
+| Test | Result |
+|------|--------|
+| Cross-session persistence (4 restarts + noise) | ✅ 3/3 facts recalled |
+| Distractor resistance (5 needles in 500 haystack) | ✅ 5/5 found |
+| Contradiction handling (most-recent-wins) | ✅ latest version wins |
+| Temporal reasoning (with tagging) | ✅ current > past |
+| Hallucination refusal | ✅ 3/3 flagged low-confidence |
+| Paraphrase robustness | ✅ 6/6 reworded queries hit |
+| Scale (1K and 3K episodes) | ✅ 100% accuracy, ~170ms latency |
+
+Plus 40/40 on the main test suite.
+
+## Quick start
+
+### Option A — One-line installer (recommended)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/tuuhe99-del/arn-v9/main/install.sh | bash
 ```
 
-Then connect it to your agent:
+Or download and run locally:
 
 ```bash
-arn connect
+git clone https://github.com/tuuhe99-del/arn-v9.git ~/arn_v9
+bash ~/arn_v9/install.sh
 ```
 
-`arn connect` detects your hardware, picks the right model size, and wires everything up automatically. That's it — your agent now has memory.
+The installer:
+- checks Python 3.10+
+- installs pip dependencies
+- sets up shell aliases (`arn` and `arn-cli`)
+- starts the daemon (eliminates ~10s cold-start, keeps model hot)
+- installs the OpenClaw skill if OpenClaw is detected
+- runs the test suite to verify everything works
 
----
-
-## What it does
-
+**Options:**
+```bash
+bash install.sh --dir /custom/path      # install somewhere else
+bash install.sh --no-daemon             # skip daemon setup
+bash install.sh --no-openclaw         # skip OpenClaw skill
+bash install.sh --skip-tests            # faster install, skip tests
 ```
-Session 1:
-  You: "My name is Mohamed and I prefer Python"
-  Agent: stores this automatically
 
-Session 2 (days later, after restart):
-  You: "What's my name?"
-  Agent: "Mohamed" ← pulled from memory, not re-explained
-```
-
-ARN stores facts as semantic vectors — meaning it finds relevant memories by *meaning*, not keyword match. Ask "what language does the user like to code in?" after storing "prefers Python" and it finds it, even though none of the words match exactly.
-
----
-
-## Why ARN over mem0, Zep, or LangMem?
-
-| | **ARN** | mem0 | Zep | LangMem |
-|---|---|---|---|---|
-| Cost | **$0/month** | $0–$249/mo | $0–$25+/mo | $0 |
-| Runs locally | ✅ fully offline | ⚠️ complex self-host | ❌ cloud only | ✅ library |
-| Works on Raspberry Pi | ✅ tested | ❌ too heavy | ❌ cloud | ⚠️ |
-| Needs LLM API for memory | **No** | Yes (GPT default) | Yes | Yes |
-| Temporal tagging (past vs now) | ✅ built-in | ❌ | ⚠️ partial | ❌ |
-| Auto-inject (passive absorption) | ✅ | ❌ manual | ❌ manual | ⚠️ |
-| Setup | **2 commands** | API keys + config | Cloud signup | LangGraph required |
-| Framework lock-in | None | None | None | LangChain only |
-
-**Where competitors win:** mem0 has enterprise compliance (SOC 2, HIPAA) and knowledge graphs. Zep has entity extraction. LangMem has procedural memory for LangGraph agents. If you need those, use them.
-
-**Where ARN wins:** you want memory that runs on your own hardware, costs nothing per month, and doesn't require an API key just to store a fact.
-
----
-
-## How it actually works (the short version)
-
-Most memory systems do: store embedding → vector search → inject top results. That breaks in common situations.
-
-**ARN does it differently:**
-
-**1. Temporal tagging** — "User used to prefer React, now prefers Vue." A plain vector search returns both with similar scores. ARN tags every memory as `past`, `current`, or `future` and filters at recall time so you always get the right version.
-
-**2. Cortical column voting** — 8 domain-specialized processors (code, conversation, facts, errors, decisions, etc.) each score incoming memories independently. Important information from any domain gets stored correctly. Noise gets filtered.
-
-**3. Episodic → semantic consolidation** — Like how human sleep consolidates memories. Recent facts stay as specific episodes. Repeated patterns get consolidated into general knowledge. This keeps storage efficient and recall relevant long-term.
-
-**4. Prediction error weighting** — Surprising information gets stored with higher priority. If you already know something, ARN won't re-store it with the same weight. Novel facts stand out.
-
-**5. Auto-inject (Phase 2)** — Passive memory layer. ARN automatically absorbs every user message and injects relevant context at the start of each session. The agent just knows — no tool calls, no "let me check my memory."
-
----
-
-## Model tiers — pick based on your hardware
-
-The installer picks automatically. You can override:
+### Option B — Manual install
 
 ```bash
-bash install.sh --model nano    # 22MB  — Raspberry Pi, anything with <1GB free RAM
-bash install.sh --model small   # 420MB — laptops, mid-range hardware
-bash install.sh --model base    # 440MB — recommended for most desktops ← default on 6-12GB RAM
-bash install.sh --model large   # 1.3GB — high-end desktop or server
-bash install.sh --model xl      # ~14GB — GPU server, top-tier quality
+pip install sentence-transformers numpy
+git clone https://github.com/tuuhe99-del/arn-v9.git
+cd arn-v9
+python3 -m arn_v9.tests.check_env   # verify environment
+python3 -m arn_v9.tests.test_all    # run tests
 ```
 
-| Tier | Model | Size | RAM | Best for |
-|------|-------|------|-----|----------|
-| `nano` | all-MiniLM-L6-v2 | 22MB | ~90MB | Raspberry Pi, low-power devices |
-| `small` | all-mpnet-base-v2 | 420MB | ~420MB | Laptops, Pi 5 with 8GB RAM |
-| `base` | BAAI/bge-base-en-v1.5 | 440MB | ~500MB | Most desktops — good balance |
-| `large` | BAAI/bge-large-en-v1.5 | 1.3GB | ~1.3GB | High-end desktop / server |
-| `xl` | intfloat/e5-mistral-7b-instruct | ~14GB | 2.5GB+ | GPU machine, maximum quality |
-
-Switch tier any time — just set the env var and restart the daemon:
-```bash
-export ARN_EMBEDDING_MODEL="BAAI/bge-large-en-v1.5"
-arn daemon stop && arn daemon start
-```
-
----
-
-## Usage — for everyone
-
-### Command line (simplest)
-
-```bash
-# Store something
-arn store "My name is Mohamed and I'm studying IT at Columbus State"
-arn store "I prefer Python over JavaScript" --importance 0.8
-arn store "I used to work at the coffee shop on campus" --time-context past
-
-# Recall by meaning — not keyword
-arn recall "what does the user study?"
-arn recall "programming language preference"
-arn recall "where did user work before?"
-
-# Get a full context block (ready to paste into a system prompt)
-arn context "user background and preferences"
-
-# Check what's stored
-arn stats
-
-# Check daemon status
-arn ping
-```
-
-### Python — basic
+### Basic usage
 
 ```python
-from arn import ARNv9
+from arn_v9 import ARNv9
 
-arn = ARNv9(data_dir="~/.arn_data/default")
+arn = ARNv9(data_dir="./my_agent_memory")
 
 # Store facts
 arn.perceive("User prefers Python for scripting", importance=0.8)
 arn.perceive("Deployed on Raspberry Pi 5 with 8GB RAM", importance=0.7)
 
 # Recall by meaning
-results = arn.recall("what language does the user prefer?", top_k=3)
+results = arn.recall("what does the user code in?", top_k=3)
 for r in results:
     print(f"[{r['score']:.2f}] {r['content']}")
-# Output:
-# [0.82] User prefers Python for scripting
 
 arn.close()
 ```
 
-### Python — with temporal tagging (recommended)
+### With the plugin API (temporal tagging + confidence tiers)
 
 ```python
-from arn import ARNPlugin
+from arn_v9.plugin import ARNPlugin
 
-with ARNPlugin(agent_id="my_agent", data_root="~/.arn_data") as arn:
+with ARNPlugin(agent_id="my_agent", data_root="./memory") as p:
+    # Tag facts with when they're true
+    p.store("User used to prefer Python",
+            time_context='past', importance=0.6)
+    p.store("User now exclusively uses Rust",
+            time_context='current', importance=0.8)
 
-    # Tag facts with WHEN they're true
-    arn.store("User prefers Vue for frontend", importance=0.8, time_context="current")
-    arn.store("User used to prefer React before 2024", importance=0.6, time_context="past")
-    arn.store("User plans to learn Rust next month", importance=0.5, time_context="future")
+    # Queries with temporal keywords get filtered automatically
+    results = p.recall("what does the user currently prefer?")
+    # Returns Rust as rank 0, not Python
 
-    # Recall — temporal filter applied automatically
-    hits = arn.recall("frontend framework preference", top_k=3)
-    for h in hits:
-        print(f"[{h['score']:.2f}] [{h['time_context']}] {h['content']}")
-    # Output:
-    # [0.81] [current] User prefers Vue for frontend
-    # [0.54] [past] User used to prefer React before 2024
+    # Check if recall is confident
+    for r in results:
+        if r['confidence_tier'] == 'low':
+            print("I don't know — not enough matching info")
 ```
 
-### Python — auto-inject (Phase 2, fully passive)
+### REST API
+
+```bash
+# Run the server
+python3 -m uvicorn arn_v9.api.server:app --host 0.0.0.0 --port 8742
+
+# Or via Docker
+docker build -t arn-v9 .
+docker run -p 8742:8742 -v arn_data:/data arn-v9
+```
+
+Then:
+
+```bash
+curl -X POST http://localhost:8742/v1/memory/store \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id": "user1", "content": "User likes dark mode", "importance": 0.5}'
+
+curl -X POST http://localhost:8742/v1/memory/recall \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id": "user1", "query": "UI preferences", "top_k": 3}'
+```
+
+### Model tiers
+
+You can pick the embedding model based on your constraints:
+
+| Tier | Model | Size | Speed | Quality |
+|------|-------|------|-------|---------|
+| `nano` (default) | all-MiniLM-L6-v2 | 22MB | ~30ms | Good |
+| `small` | all-mpnet-base-v2 | 420MB | ~60ms | Better |
+| `base` | bge-base-en-v1.5 | 440MB | ~80ms | Best retrieval |
+| `base-e5` | e5-base-v2 | 440MB | ~80ms | Alt. retrieval |
 
 ```python
-from arn import AutoInject
+# Set via env
+export ARN_EMBEDDING_TIER=base
 
-# Works with any OpenAI-compatible LLM (Ollama, LM Studio, etc.)
-ai = AutoInject(
-    agent_id="my_agent",
-    backend="ollama",
-    model="qwen2.5:0.5b",   # or any model you have
-)
-
-# Memory is automatic — no store/recall calls needed
-response = ai.chat("Hi, my name is Mohamed and I prefer Python")
-# ARN stores this in the background
-
-response = ai.chat("What's my name?")
-print(response)  # → "Mohamed"
-# Next session after restart — still knows your name
+# Or at init
+arn = ARNv9(embedding_tier='base')
 ```
 
-### Drop-in adapter — any framework
+In my stress tests, nano and bge-base both scored 7/7. The bigger model didn't win on any scenario. I'd stick with nano unless you have a specific reason.
 
-```python
-from arn.adapters.raw import ARNMemory
-
-with ARNMemory() as mem:
-    # Store
-    mem.store("User prefers dark mode", importance=0.7)
-    mem.store("User is building a Telegram bot", importance=0.8)
-
-    # Recall
-    hits = mem.recall("what is user building?", top_k=3)
-    print(hits[0]["content"])  # → User is building a Telegram bot
-
-    # Get formatted context block for system prompt injection
-    context = mem.context("user preferences and projects")
-    print(context)
-    # → [MEMORY - current] User prefers dark mode
-    #   [MEMORY - current] User is building a Telegram bot
-```
-
----
-
-## Connecting to your agent framework
-
-### OpenClaw
-
-`arn connect` handles this automatically. The memory skill gets installed to all your agents.
-
-Manual install:
-```bash
-mkdir -p ~/.openclaw/workspace/agents/<agent-name>/skills/arn-memory
-cp arn/openclaw_skill/SKILL.md ~/.openclaw/workspace/agents/<agent-name>/skills/arn-memory/
-```
-
-Once installed, your agent can use:
-```bash
-arn store "fact" --importance 0.8
-arn recall "query"
-arn context "topic"
-```
-
-### LangChain
-
-```python
-from arn.adapters.langchain import get_tools
-from langchain.agents import initialize_agent
-
-# Get ARN as LangChain tools
-tools = get_tools(data_dir="~/.arn_data/default")
-# Returns: remember() and recall_memory() tools
-
-agent = initialize_agent(tools, llm, agent="zero-shot-react-description")
-
-# Agent now has persistent memory automatically
-agent.run("Remember that I prefer dark mode")
-agent.run("What are my preferences?")  # ← recalls from ARN
-```
-
-### Claude (system prompt method)
-
-Add this to your Claude system prompt or AGENTS.md:
+## Project structure
 
 ```
-You have persistent memory via ARN.
-
-To store a fact worth remembering:
-  arn store "<fact>" --importance 0.8
-
-To recall relevant context:
-  arn recall "<question>"
-
-To get full context for a topic:
-  arn context "<topic>"
-
-Rules:
-- Store when: user shares preferences, makes decisions, tells you something personal
-- Recall before answering anything where past context might matter
-- Use --time-context past when storing something that used to be true
+arn_v9/
+├── core/
+│   ├── embeddings.py      # Embedding engine with tier support
+│   └── cognitive.py       # Main ARN, domain columns, working memory
+├── storage/
+│   └── persistence.py     # SQLite + memmap vectors
+├── api/
+│   └── server.py          # FastAPI REST wrapper
+├── plugin.py              # OpenClaw-compatible plugin interface
+├── scripts/
+│   └── arn_cli.py         # CLI for shell/SKILL.md integration
+├── openclaw_skill/
+│   └── SKILL.md           # Ready-to-install OpenClaw skill
+├── tests/
+│   ├── check_env.py       # Pre-flight check
+│   └── test_all.py        # 40 tests, tier 1 (plumbing) + tier 2 (semantic)
+└── benchmarks/
+    ├── stress_test.py     # 7 adversarial scenarios
+    └── simulate_agent.py  # 5-day agent simulation
 ```
 
-### Custom / any other framework
+## OpenClaw integration
 
-```python
-from arn.adapters.raw import ARNMemory
+Drop `openclaw_skill/SKILL.md` into `~/.openclaw/skills/arn-memory/` and the skill is auto-discovered. Your agent gets store/recall/context commands that invoke `scripts/arn_cli.py` under the hood.
 
-mem = ARNMemory(data_dir="~/.arn_data/default")
+See `ARN_V9_OPENCLAW_INTEGRATION_GUIDE.md` in the repo root for the full setup.
 
-# In your pre-processing step:
-context = mem.context("relevant topic for this message")
-system_prompt = base_system_prompt + "\n\nWhat you remember:\n" + context
+## What I know is rough
 
-# In your post-processing step:
-mem.store(user_message, importance=0.5)  # absorb user messages passively
-```
+I'm being upfront about this because I want people to build on it, not waste time on dead ends:
 
----
+- **No inter-agent memory sharing** — each agent_id gets isolated storage. If you want two agents to share knowledge, you'd need to build a sync layer. I haven't.
+- **Consolidation is synchronous** — it runs on the main thread. Fine for small workloads, but if you're processing hundreds of stores per second you'd want to move it to a background thread or queue.
+- **Contradiction detection is a word-overlap heuristic** — real NLI (natural language inference) would be better but too heavy for Pi 5. If you're deploying on beefier hardware, swapping in an NLI model would probably improve this a lot.
+- **Temporal reasoning needs the agent to tag episodes** — the system can't automatically figure out "this fact is now outdated" without explicit `time_context`. Auto-inferring this from content is an open problem.
+- **No multi-modal support** — text only. Adding image/audio embeddings is doable but not started.
+- **Embedding model picks aren't great for non-English** — the defaults are English-tuned. Multilingual support would need a different model like `paraphrase-multilingual-MiniLM-L12-v2`.
+- **Tests have `@requires_embeddings` skips** — if you run without sentence-transformers installed, 7 of 40 tests skip. That's correct behavior but means the CI matrix needs both modes.
+- **I'm not a seasoned ML engineer** — I'm a student. Some of the scoring weights, similarity thresholds, and consolidation parameters are empirically tuned but probably not optimal. If you have a better intuition for these, PRs welcome.
 
-## Daemon (keeps recall fast)
+## Things I think would be valuable next
 
-Without the daemon, each recall call loads the embedding model from scratch (~10s cold start). The daemon keeps it loaded in RAM — 0.5s recall instead.
+If you're looking for somewhere to contribute:
 
-```bash
-arn daemon start    # start in background
-arn daemon stop     # stop
-arn daemon status   # check if running
-arn ping            # quick ping
-```
-
-The installer sets up the daemon automatically via systemd (if available) or background process.
-
----
-
-## Stress test results
-
-These aren't cherry-picked — they're from `tests/stress_test.py`, which you can run yourself:
-
-| Test | Result |
-|------|--------|
-| Cross-session persistence (4 restarts + noise injection) | ✅ 3/3 facts recalled |
-| Distractor resistance (5 target facts in 500 noise facts) | ✅ 5/5 found |
-| Contradiction handling | ✅ most-recent version always wins |
-| Temporal reasoning (past vs current filtering) | ✅ current always beats past |
-| Hallucination refusal (low-confidence detection) | ✅ 3/3 flagged correctly |
-| Paraphrase robustness (reworded queries) | ✅ 6/6 hit |
-| Scale — 1,000 episodes | ✅ 100% accuracy, ~170ms |
-| Scale — 3,000 episodes | ✅ 100% accuracy, ~170ms |
-
-Run them yourself:
-```bash
-cd ~/arn
-python3 -m pytest tests/ -v
-```
-
----
-
-## Troubleshooting
-
-**"command not found: arn"** — restart your shell or run `source ~/.bashrc`
-
-**"No module named arn"** — run `pip install -e ~/arn`
-
-**Recall takes 10+ seconds** — daemon isn't running: `arn daemon start`
-
-**Daemon won't start** — first run downloads the embedding model (22MB–1.3GB depending on tier). Check progress: `tail -f ~/.arn_daemon.log`
-
-**Nothing gets recalled** — run `arn stats` to confirm episodes were stored. Check `ARN_DATA_DIR` is the same path used when storing.
-
-**On Raspberry Pi, running out of RAM** — force nano tier:
-```bash
-export ARN_EMBEDDING_MODEL="sentence-transformers/all-MiniLM-L6-v2"
-arn daemon stop && arn daemon start
-```
-
-**Want to wipe memory and start fresh:**
-```bash
-rm -rf ~/.arn_data/default
-```
-
----
-
-## File structure
-
-```
-arn/
-├── core/           # embedding engine + cognitive architecture
-│   ├── cognitive.py    # cortical columns, episodic/semantic split, consolidation
-│   ├── embeddings.py   # model registry, all 5 tiers
-│   └── __init__.py
-├── storage/        # SQLite + memmap persistence
-├── phase2/         # auto-inject layer (passive absorption)
-│   └── memory_llm.py   # MemoryAugmentedLLM / AutoInject
-├── adapters/       # framework integrations
-│   ├── openclaw.py
-│   ├── langchain.py
-│   └── raw.py          # ARNMemory — works with anything
-├── plugin.py       # ARNPlugin — temporal tagging + full API
-├── cli.py          # arn command entrypoint
-└── __init__.py     # exports: ARNv9, ARNPlugin, AutoInject
-
-install.sh          # one-line installer
-tests/              # full test suite
-```
-
----
+1. **Mem0/Zep comparison benchmark** — I started one but ran out of runway. Running ARN head-to-head on their published benchmarks would make this more credible.
+2. **Async consolidation** — move it off the main thread so high-throughput agents don't stall.
+3. **Cross-agent shared semantic layer** — read-only "organizational knowledge" that multiple agents can draw on.
+4. **Better contradiction detection** — even a small NLI model would help.
+5. **Multilingual embeddings** — swapping the default model for a multilingual one.
+6. **ONNX quantized version** — smaller and faster for edge deployment.
+7. **LangChain/CrewAI adapters** — I built the OpenClaw one because that's what I use. Other frameworks need their own thin wrappers.
 
 ## License
 
-**Free** for personal use, students, researchers, and open-source projects.
+This is licensed under **PolyForm Small Business 1.0.0** — which basically means:
 
-**Paid license required** for companies over $1M annual revenue using this in a product.
+- **Free for you** if you're an individual, student, researcher, hobbyist, or working at a small company (<100 people and <$1M revenue)
+- **Paid license required** if you're at a bigger company that wants to use this commercially
 
-See [LICENSE.md](./LICENSE.md) and [COMMERCIAL.md](./COMMERCIAL.md). The short version: if you're a student or indie dev, use it for free. If a company is making money from it, reach out.
+If you fit the free tier, just use it. Keep the LICENSE file in your fork and you're good.
+
+If your company is over the threshold and you want to use this in a product, open an issue titled "Commercial licensing inquiry" or reach me through my GitHub profile. See [COMMERCIAL.md](./COMMERCIAL.md) for details.
+
+I picked this instead of MIT because I'm a student and this project took a lot of work. If it's useful to you personally, I want you to have it free. If a corporation is making money off it, I'd like a share of that. The PolyForm license is written by actual lawyers and is used by other projects for this same reason.
+
+## Connecting ARN to Claude / OpenClaw
+
+This is the part most people struggle with, so here's the exact steps:
+
+### With OpenClaw
+
+The installer handles this automatically if OpenClaw is already set up. It copies `SKILL.md` into your skills directory. Once installed:
+
+1. The `arn-memory` skill loads automatically when your agent starts
+2. Your agent can call `arn recall` / `arn store` from any session
+3. The daemon keeps the embedding model hot — 0.5s recall instead of 10s
+
+Manual install if the auto-detection missed it:
+```bash
+mkdir -p ~/.openclaw/workspace/skills/arn-memory
+cp ~/arn_v9/arn_v9/openclaw_skill/SKILL.md ~/.ocplatform/workspace/skills/arn-memory/
+```
+
+### With any Claude setup (Claude.ai, Claude Code, custom)
+
+Paste this into your system prompt or `AGENTS.md`:
+
+```
+You have persistent memory via ARN v9.
+
+To store a fact:
+  python3 ~/arn_v9/arn_client.py store "<fact>" --importance 0.8
+
+To recall by meaning:
+  python3 ~/arn_v9/arn_client.py recall "<question>"
+
+To get context for a topic:
+  python3 ~/arn_v9/arn_client.py context "<topic>"
+
+Store facts when the user shares preferences, makes decisions, or tells you something worth remembering.
+Recall before answering anything where past context might matter.
+```
+
+### With LangChain
+
+```python
+from arn_v9 import ARNv9
+
+arn = ARNv9(data_dir="~/.arn_data/default")
+
+# In your tool definition:
+def remember(fact: str):
+    """Store something worth remembering about this user."""
+    arn.perceive(fact, importance=0.7)
+
+def recall(query: str) -> str:
+    """Recall relevant context before answering."""
+    hits = arn.recall(query, top_k=3)
+    return "\n".join(h["content"] for h in hits)
+```
+
+### Troubleshooting
+
+**"No module named arn_v9"** → run `pip install -e ~/arn_v9` again
+
+**Recall takes 10+ seconds** → daemon isn't running. Start it:
+```bash
+python3 ~/arn_v9/arn_daemon.py start &
+```
+
+**Daemon ping fails** → embedding model is still loading (first run downloads ~22MB). Wait 30s and retry.
+
+**Nothing being recalled** → check you stored something first: `arn stats` shows episode count
 
 ---
 
-Built by Mohamed Mohamed — IT student at Columbus State Community College, on a Raspberry Pi 5.
+## About
 
-[GitHub](https://github.com/tuuhe99-del/arn-v9) · [Issues](https://github.com/tuuhe99-del/arn-v9/issues)
+My name is Mohamed Mohamed. I'm an IT student at Columbus State Community College (currently on academic probation, not gonna hide that). I built this on a Raspberry Pi 5 I recovered from a corrupted SD card, using OpenClaw as my agent framework.
+
+If you want to reach out, open an issue or reach me through the contacts in my GitHub profile. I'm not claiming this is production-grade enterprise software — I'm a student who built something that works and passes real adversarial tests. If you find bugs or have ideas, please say so.
+
+Thanks for looking at this.
+
+— Mohamed

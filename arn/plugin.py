@@ -83,7 +83,33 @@ class ARNPlugin:
             )
         
         self._last_maintain = time.time()
+        
+        # Extensions (optional — graceful if extensions.py has issues)
+        try:
+            from .extensions import (
+                HybridRetriever, StoreCallbackManager,
+            )
+            self._hybrid = HybridRetriever()
+            self._callbacks = StoreCallbackManager()
+            self._dedup_enabled = True
+            self._rebuild_bm25()
+        except Exception:
+            self._hybrid = None
+            self._callbacks = None
+            self._dedup_enabled = False
+        
         logger.info(f"ARN plugin initialized for agent '{agent_id}'")
+    
+    def _rebuild_bm25(self):
+        """Rebuild the BM25 keyword index from existing episodes."""
+        if self._hybrid is None:
+            return
+        try:
+            episodes = self._arn.storage.get_all_episodes()
+            if episodes:
+                self._hybrid.build_bm25_index(episodes)
+        except Exception:
+            pass  # BM25 is optional, don't break on failure
     
     # ===========================================
     # PRIMARY API (what agents call)
@@ -219,6 +245,7 @@ class ARNPlugin:
         simplified = []
         for r in results:
             entry = {
+                'id': r.get('id'),
                 'content': r['content'],
                 'score': round(r['score'], 4),
                 'type': r['type'],

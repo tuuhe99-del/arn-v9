@@ -22,6 +22,7 @@ import os
 import shutil
 import json
 import time
+import hashlib
 import logging
 from typing import Optional, List, Dict, Tuple, Any
 from pathlib import Path
@@ -31,7 +32,7 @@ from ..core.embeddings import EMBEDDING_DIM
 logger = logging.getLogger("arn.storage")
 
 # Schema version for migrations
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class StorageEngine:
@@ -107,17 +108,31 @@ class StorageEngine:
         return self._conn
     
     def _init_db(self):
-        """Create tables if they don't exist."""
+        """Create tables if they don't exist, migrate if needed."""
         conn = self._get_conn()
-        conn.executescript("""
+        
+        # Create schema_version table first (needed to check version)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS schema_version (
                 version INTEGER PRIMARY KEY
-            );
-            
+            )
+        """)
+        conn.commit()
+        
+        # Check and run migrations BEFORE creating tables with new columns
+        existing = conn.execute("SELECT version FROM schema_version").fetchone()
+        if existing is not None and existing[0] < SCHEMA_VERSION:
+            self._migrate_schema(conn, existing[0])
+            conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
+            conn.commit()
+        
+        # Now create all tables (safe for both fresh installs and migrated dbs)
+        conn.executescript("""
             CREATE TABLE IF NOT EXISTS episodes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 vec_index INTEGER NOT NULL,
                 content TEXT NOT NULL,
+                content_hash TEXT,
                 context_json TEXT DEFAULT '{}',
                 importance REAL DEFAULT 0.5,
                 prediction_error REAL DEFAULT 0.0,
@@ -126,7 +141,11 @@ class StorageEngine:
                 created_at REAL NOT NULL,
                 last_accessed REAL,
                 consolidated INTEGER DEFAULT 0,
-                source TEXT DEFAULT 'user'
+                source TEXT DEFAULT 'user',
+                expires_at REAL,
+                superseded_by INTEGER,
+                invalidated_at REAL,
+                user_id TEXT
             );
             
             CREATE TABLE IF NOT EXISTS semantic_nodes (
@@ -153,16 +172,79 @@ class StorageEngine:
                 ON episodes(created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_episodes_consolidated 
                 ON episodes(consolidated);
+            CREATE INDEX IF NOT EXISTS idx_episodes_hash
+                ON episodes(content_hash);
+            CREATE INDEX IF NOT EXISTS idx_episodes_expires
+                ON episodes(expires_at);
+            CREATE INDEX IF NOT EXISTS idx_episodes_user
+                ON episodes(user_id);
             CREATE INDEX IF NOT EXISTS idx_semantic_confidence 
                 ON semantic_nodes(confidence DESC);
+            
+            CREATE TABLE IF NOT EXISTS entities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                text TEXT NOT NULL,
+                label TEXT NOT NULL,
+                first_seen REAL NOT NULL,
+                last_seen REAL NOT NULL,
+                mention_count INTEGER DEFAULT 1,
+                user_id TEXT
+            );
+            
+            CREATE TABLE IF NOT EXISTS entity_episodes (
+                entity_id INTEGER NOT NULL,
+                episode_id INTEGER NOT NULL,
+                PRIMARY KEY (entity_id, episode_id),
+                FOREIGN KEY (entity_id) REFERENCES entities(id),
+                FOREIGN KEY (episode_id) REFERENCES episodes(id)
+            );
+            
+            CREATE INDEX IF NOT EXISTS idx_entity_text
+                ON entities(text);
+            CREATE INDEX IF NOT EXISTS idx_entity_label
+                ON entities(label);
         """)
         
-        # Set schema version
+        # Set schema version for fresh installs
         existing = conn.execute("SELECT version FROM schema_version").fetchone()
         if existing is None:
             conn.execute("INSERT INTO schema_version VALUES (?)", (SCHEMA_VERSION,))
         
         conn.commit()
+    
+    def _migrate_schema(self, conn, from_version: int):
+        """Migrate database schema from older versions."""
+        if from_version < 2:
+            # v1 → v2: add new columns to episodes, create entities tables
+            migrations = [
+                "ALTER TABLE episodes ADD COLUMN content_hash TEXT",
+                "ALTER TABLE episodes ADD COLUMN expires_at REAL",
+                "ALTER TABLE episodes ADD COLUMN superseded_by INTEGER",
+                "ALTER TABLE episodes ADD COLUMN invalidated_at REAL",
+                "ALTER TABLE episodes ADD COLUMN user_id TEXT",
+            ]
+            for sql in migrations:
+                try:
+                    conn.execute(sql)
+                except Exception:
+                    pass  # Column may already exist
+            
+            # Backfill content_hash for existing episodes
+            rows = conn.execute("SELECT id, content FROM episodes WHERE content_hash IS NULL").fetchall()
+            for row in rows:
+                normalized = ' '.join(row['content'].lower().split())
+                h = hashlib.sha256(normalized.encode()).hexdigest()[:16]
+                conn.execute("UPDATE episodes SET content_hash = ? WHERE id = ?", (h, row['id']))
+            
+            # Create indexes for new columns
+            for idx_sql in [
+                "CREATE INDEX IF NOT EXISTS idx_episodes_hash ON episodes(content_hash)",
+                "CREATE INDEX IF NOT EXISTS idx_episodes_expires ON episodes(expires_at)",
+                "CREATE INDEX IF NOT EXISTS idx_episodes_user ON episodes(user_id)",
+            ]:
+                conn.execute(idx_sql)
+            
+            logger.info(f"Migrated schema v1 → v2 ({len(rows)} episodes hash-backfilled)")
     
     def _init_vectors(self):
         """Initialize or load memory-mapped vector files."""
@@ -203,10 +285,16 @@ class StorageEngine:
     def store_episode(self, content: str, vector: np.ndarray,
                       context: dict = None, importance: float = 0.5,
                       prediction_error: float = 0.0,
-                      source: str = 'user') -> int:
+                      source: str = 'user',
+                      expires_at: float = None,
+                      user_id: str = None) -> int:
         """Store a new episodic memory. Returns episode ID."""
         conn = self._get_conn()
         now = time.time()
+        
+        # Content hash for deduplication
+        normalized = ' '.join(content.lower().split())
+        c_hash = hashlib.sha256(normalized.encode()).hexdigest()[:16]
         
         # Find next available vector index
         # CRITICAL: Use MAX(vec_index)+1, NOT COUNT(*).
@@ -230,17 +318,21 @@ class StorageEngine:
         
         # Store metadata
         cursor = conn.execute("""
-            INSERT INTO episodes (vec_index, content, context_json, importance,
-                                  prediction_error, created_at, source)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO episodes (vec_index, content, content_hash, context_json, 
+                                  importance, prediction_error, created_at, source,
+                                  expires_at, user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             vec_index,
             content,
+            c_hash,
             json.dumps(context or {}),
             importance,
             prediction_error,
             now,
-            source
+            source,
+            expires_at,
+            user_id,
         ))
         
         conn.commit()
@@ -468,6 +560,87 @@ class StorageEngine:
         conn.commit()
     
     # =========================================================
+    # ENTITY OPERATIONS
+    # =========================================================
+    
+    def store_entity(self, text: str, label: str, episode_id: int,
+                     user_id: str = None) -> int:
+        """
+        Store or update an entity mention. Links it to the source episode.
+        Returns entity ID.
+        """
+        conn = self._get_conn()
+        now = time.time()
+        
+        # Check if entity already exists (case-insensitive)
+        row = conn.execute(
+            "SELECT id, mention_count FROM entities WHERE LOWER(text) = LOWER(?)",
+            (text,)
+        ).fetchone()
+        
+        if row:
+            entity_id = row['id']
+            conn.execute("""
+                UPDATE entities SET last_seen = ?, mention_count = mention_count + 1
+                WHERE id = ?
+            """, (now, entity_id))
+        else:
+            cursor = conn.execute("""
+                INSERT INTO entities (text, label, first_seen, last_seen, mention_count, user_id)
+                VALUES (?, ?, ?, ?, 1, ?)
+            """, (text, label, now, now, user_id))
+            entity_id = cursor.lastrowid
+        
+        # Link entity to episode (ignore if already linked)
+        conn.execute("""
+            INSERT OR IGNORE INTO entity_episodes (entity_id, episode_id)
+            VALUES (?, ?)
+        """, (entity_id, episode_id))
+        
+        conn.commit()
+        return entity_id
+    
+    def search_entities(self, text: str = None, label: str = None,
+                        limit: int = 20) -> List[dict]:
+        """Search entities by text and/or label."""
+        conn = self._get_conn()
+        query = "SELECT * FROM entities WHERE 1=1"
+        params = []
+        
+        if text:
+            query += " AND LOWER(text) LIKE LOWER(?)"
+            params.append(f"%{text}%")
+        if label:
+            query += " AND label = ?"
+            params.append(label)
+        
+        query += " ORDER BY mention_count DESC LIMIT ?"
+        params.append(limit)
+        
+        return [dict(r) for r in conn.execute(query, params).fetchall()]
+    
+    def get_entity_episodes(self, entity_id: int) -> List[dict]:
+        """Get all episodes linked to an entity."""
+        conn = self._get_conn()
+        rows = conn.execute("""
+            SELECT e.* FROM episodes e
+            JOIN entity_episodes ee ON e.id = ee.episode_id
+            WHERE ee.entity_id = ?
+            ORDER BY e.created_at DESC
+        """, (entity_id,)).fetchall()
+        return [self._row_to_episode(r) for r in rows]
+    
+    def get_episode_entities(self, episode_id: int) -> List[dict]:
+        """Get all entities mentioned in an episode."""
+        conn = self._get_conn()
+        rows = conn.execute("""
+            SELECT ent.* FROM entities ent
+            JOIN entity_episodes ee ON ent.id = ee.entity_id
+            WHERE ee.episode_id = ?
+        """, (episode_id,)).fetchall()
+        return [dict(r) for r in rows]
+    
+    # =========================================================
     # INTERNAL HELPERS
     # =========================================================
     
@@ -485,6 +658,11 @@ class StorageEngine:
             'last_accessed': row['last_accessed'],
             'consolidated': bool(row['consolidated']),
             'source': row['source'],
+            'content_hash': row['content_hash'] if 'content_hash' in row.keys() else None,
+            'expires_at': row['expires_at'] if 'expires_at' in row.keys() else None,
+            'superseded_by': row['superseded_by'] if 'superseded_by' in row.keys() else None,
+            'invalidated_at': row['invalidated_at'] if 'invalidated_at' in row.keys() else None,
+            'user_id': row['user_id'] if 'user_id' in row.keys() else None,
         }
     
     def _row_to_semantic(self, row) -> dict:
