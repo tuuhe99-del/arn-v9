@@ -285,11 +285,22 @@ def _quick_verify(data_dir: Path, model_name: str):
 def _get_plugin():
     """Return an ARNPlugin instance (supports temporal tagging + full API)."""
     data_dir = str(_data_dir())
-    model = os.environ.get("ARN_EMBEDDING_MODEL", "")
+    # ARN_EMBEDDING_TIER is the canonical var; fall back to translating ARN_EMBEDDING_MODEL
+    tier = os.environ.get("ARN_EMBEDDING_TIER", None)
+    if tier is None:
+        model = os.environ.get("ARN_EMBEDDING_MODEL", "")
+        if "mpnet" in model:
+            tier = "small"
+        elif "bge-base" in model:
+            tier = "base"
+        elif "e5-base" in model:
+            tier = "base-e5"
+        else:
+            tier = "nano"
     from arn.plugin import ARNPlugin
     kwargs = {"agent_id": "cli", "data_root": str(Path(data_dir).parent)}
-    if model:
-        kwargs["embedding_model"] = model
+    if tier:
+        kwargs["embedding_tier"] = tier
     return ARNPlugin(**kwargs)
 
 

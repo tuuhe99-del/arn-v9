@@ -47,9 +47,9 @@ logging.getLogger('sentence_transformers').setLevel(logging.ERROR)
 logging.getLogger('transformers').setLevel(logging.ERROR)
 logging.getLogger('huggingface_hub').setLevel(logging.ERROR)
 
-# ─── Make arn_v9 importable from any install location ───
+# ─── Make arn importable from any install location ───
 _script_dir = Path(__file__).resolve().parent
-_package_root = _script_dir.parent.parent  # arn_v9/scripts → arn_v9 → root
+_package_root = _script_dir.parent.parent  # arn/phase2 -> arn -> repo root
 sys.path.insert(0, str(_package_root))
 # Fallback: check if installed under ~/
 sys.path.insert(0, str(Path.home()))
@@ -111,7 +111,7 @@ def get_plugin(strict: bool = False, config: dict = None):
     Always uses ARN_EMBEDDING_TIER (not model name) and
     consistent data directory.
     """
-    from arn_v9.plugin import ARNPlugin
+    from arn.plugin import ARNPlugin
     
     if config is None:
         config = get_config()
@@ -221,7 +221,7 @@ def cmd_export(args):
     with get_plugin(strict=args.strict) as plugin:
         episodes = plugin._arn.storage.get_all_episodes()
         export = {
-            'version': 'arn_v9_export_v1',
+            'version': 'arn_export_v1',
             'exported_at': time.time(),
             'agent_id': get_config()['agent_id'],
             'episode_count': len(episodes),
@@ -485,27 +485,31 @@ def cmd_setup(args):
     print(f"\nDownloading embedding model ({tier})...")
     print(f"  This may take 1-2 minutes on first run...")
     
+    _model_ok = False
     try:
-        from arn_v9.core.embeddings import EmbeddingEngine, MODEL_CONFIGS
+        from arn.core.embeddings import EmbeddingEngine, MODEL_CONFIGS
         model_info = MODEL_CONFIGS.get(tier, MODEL_CONFIGS['nano'])
         print(f"  Model: {model_info['name']}")
         
         engine = EmbeddingEngine(use_model=True, tier=tier)
         if engine.is_degraded:
-            print(f"  WARNING: Model failed to load. Check internet connection.")
-            print(f"  ARN will retry on next use.")
+            print(f"  ERROR: Model failed to load. Check internet connection.", file=sys.stderr)
+            print(f"  Fix:  pip install sentence-transformers  then re-run: arn setup", file=sys.stderr)
+            sys.exit(1)
         else:
             test_vec = engine.encode("test")
             print(f"  Loaded: {test_vec.shape[0]}-dimensional vectors")
             print(f"  Status: ready")
+            _model_ok = True
     except Exception as e:
-        print(f"  Model download issue: {e}")
-        print(f"  ARN will retry on first use.")
+        print(f"  ERROR: Model setup failed: {e}", file=sys.stderr)
+        sys.exit(1)
     
     # Step 5: Test store/recall
     print(f"\nTesting memory...")
+    _memory_ok = False
     try:
-        from arn_v9.plugin import ARNPlugin
+        from arn.plugin import ARNPlugin
         plugin = ARNPlugin(
             agent_id='default',
             data_root=str(data_dir),
@@ -525,13 +529,19 @@ def cmd_setup(args):
             # Clean up test memory
             if results[0].get('type') == 'episodic':
                 plugin._arn.storage.delete_episodes([results[0]['id']])
+            _memory_ok = True
         else:
-            print(f"  Store:  ok")
-            print(f"  Recall: returned different result (model may still be loading)")
+            print(f"  ERROR: Recall returned no results after store.", file=sys.stderr)
+            print(f"  The embedding model may not have loaded correctly.", file=sys.stderr)
+            plugin.shutdown()
+            sys.exit(1)
         
         plugin.shutdown()
+    except SystemExit:
+        raise
     except Exception as e:
-        print(f"  Test failed: {e}")
+        print(f"  ERROR: Memory test failed: {e}", file=sys.stderr)
+        sys.exit(1)
     
     # Step 6: Detect and connect clients
     if client:
@@ -557,9 +567,9 @@ def cmd_setup(args):
             for name, info in detected:
                 _setup_client(name, tier)
     
-    # Done
+    # Done — only reached if all checks passed
     print(f"\n{'='*50}")
-    print(f"ARN memory is ready.")
+    print(f"ARN memory is ready. All checks passed.")
     print(f"  Model:  {tier}")
     print(f"  Data:   {data_dir}")
     print(f"  Agent:  default")
@@ -604,7 +614,7 @@ def _setup_client(client: str, tier: str):
             content = target_file.read_text()
             cli_path = str(_script_dir / 'arn_cli.py')
             content = content.replace(
-                '~/arn_v9/scripts/arn_cli.py',
+                '~/arn-v9/arn/phase2/arn_cli.py',
                 cli_path
             )
             target_file.write_text(content)

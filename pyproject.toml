@@ -46,7 +46,7 @@ Homepage = "https://github.com/tuuhe99-del/arn-v9"
 Issues = "https://github.com/tuuhe99-del/arn-v9/issues"
 
 [project.scripts]
-arn = "arn.cli:main"
+arn = "arn.phase2.arn_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -27,7 +27,7 @@ import subprocess
 from typing import Optional
 
 SOCKET_PATH = "/tmp/arn_daemon.sock"
-ARN_CLI     = "/home/mokali/arn_v9/arn_v9/scripts/arn_cli.py"
+ARN_CLI     = "/home/mokali/arn_v9/arn/phase2/arn_cli.py"
 TIMEOUT     = 25  # seconds
 
 # ── Core socket call ────────────────────────────────────────────────────────

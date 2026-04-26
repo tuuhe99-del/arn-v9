@@ -97,7 +97,7 @@ def run_server():
     # Load ARNPlugin ONCE — this is the key: model stays in memory
     plugin = None
     try:
-        from arn_v9.plugin import ARNPlugin
+        from arn.plugin import ARNPlugin
         plugin = ARNPlugin(
             agent_id=os.environ.get('OPENCLAW_AGENT_ID', 'default'),
             data_root=os.environ.get('ARN_DATA_ROOT', os.path.expanduser('~/.arn_data')),
@@ -185,7 +185,7 @@ def run_server():
                             result.append({"content": str(hit)})
                 else:
                     import subprocess
-                    r = subprocess.run(["python3", f"{ARN_ROOT}/arn_v9/scripts/arn_cli.py",
+                    r = subprocess.run(["python3", f"{ARN_ROOT}/arn/phase2/arn_cli.py",
                         "recall", "--query", query, "--top-k", str(top_k)],
                         capture_output=True, text=True, timeout=30)
                     try: result = json.loads(r.stdout)
@@ -200,7 +200,7 @@ def run_server():
                     result = plugin.get_context_window(query=query, max_tokens=max_tokens)
                 else:
                     import subprocess
-                    r = subprocess.run(["python3", f"{ARN_ROOT}/arn_v9/scripts/arn_cli.py",
+                    r = subprocess.run(["python3", f"{ARN_ROOT}/arn/phase2/arn_cli.py",
                         "context", "--query", query, "--max-tokens", str(max_tokens)],
                         capture_output=True, text=True, timeout=30)
                     result = r.stdout
@@ -216,7 +216,7 @@ def run_server():
                     result = {"stored": True, "episode_id": getattr(r2, 'episode_id', None)}
                 else:
                     import subprocess
-                    r = subprocess.run(["python3", f"{ARN_ROOT}/arn_v9/scripts/arn_cli.py",
+                    r = subprocess.run(["python3", f"{ARN_ROOT}/arn/phase2/arn_cli.py",
                         "perceive", "--content", content, "--source", source],
                         capture_output=True, text=True, timeout=30)
                     try: result = json.loads(r.stdout)
@@ -234,7 +234,7 @@ def run_server():
                     result = {"stored": True, "episode_id": getattr(r2, 'episode_id', None)}
                 else:
                     import subprocess
-                    r = subprocess.run(["python3", f"{ARN_ROOT}/arn_v9/scripts/arn_cli.py",
+                    r = subprocess.run(["python3", f"{ARN_ROOT}/arn/phase2/arn_cli.py",
                         "store", "--content", content, "--importance", str(importance),
                         "--source", source, "--time-context", time_context],
                         capture_output=True, text=True, timeout=30)
@@ -247,7 +247,7 @@ def run_server():
                     result = plugin.get_stats()
                 else:
                     import subprocess
-                    r = subprocess.run(["python3", f"{ARN_ROOT}/arn_v9/scripts/arn_cli.py", "stats"],
+                    r = subprocess.run(["python3", f"{ARN_ROOT}/arn/phase2/arn_cli.py", "stats"],
                         capture_output=True, text=True, timeout=15)
                     try: result = json.loads(r.stdout)
                     except: result = {}
@@ -306,7 +306,7 @@ if __name__ == "__main__":
         else:
             print("⚠️  Daemon not running — falling back to direct CLI")
             os.execv("/usr/bin/python3", ["python3",
-                f"{ARN_ROOT}/arn_v9/scripts/arn_cli.py", "recall",
+                f"{ARN_ROOT}/arn/phase2/arn_cli.py", "recall",
                 "--query", query, "--top-k", "5"])
 
     elif subcmd == "stats":

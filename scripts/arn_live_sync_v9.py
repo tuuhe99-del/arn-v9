@@ -19,7 +19,7 @@ from pathlib import Path
 
 MEMORY_DB     = Path("/home/mokali/.openclaw/shared/memory.db")
 STATE_FILE    = Path("/home/mokali/.arn_data/default/sync_state.json")
-ARN_CLI       = Path("/home/mokali/arn_v9/arn_v9/scripts/arn_cli.py")
+ARN_CLI       = Path("/home/mokali/arn_v9/arn/phase2/arn_cli.py")
 POLL_INTERVAL = 16   # seconds — aligned with event bus tick
 
 logging.basicConfig(
