@@ -113,12 +113,12 @@ add_to_rc() {
     fi
 }
 
-# PYTHONPATH so the arn package is importable
+# PYTHONPATH so 'from arn_v9 import ...' works
 add_to_rc "$BASHRC" "export PYTHONPATH=\"$INSTALL_DIR:\$PYTHONPATH\"" "pythonpath"
 add_to_rc "$BASHRC" "export ARN_DATA_DIR=\"$HOME/.arn_data\"" "datadir"
 add_to_rc "$BASHRC" "export ARN_EMBEDDING_TIER=\"$TIER\"" "tier"
 add_to_rc "$BASHRC" "export ARN_AGENT_ID=\"default\"" "agentid"
-add_to_rc "$BASHRC" "alias arn='python3 $INSTALL_DIR/arn/phase2/arn_cli.py'" "alias"
+add_to_rc "$BASHRC" "alias arn='python3 $INSTALL_DIR/arn_v9/scripts/arn_cli.py'" "alias"
 
 # Also do zsh if it exists
 if [ -f "$ZSHRC" ]; then
@@ -126,7 +126,7 @@ if [ -f "$ZSHRC" ]; then
     add_to_rc "$ZSHRC" "export ARN_DATA_DIR=\"$HOME/.arn_data\"" "datadir"
     add_to_rc "$ZSHRC" "export ARN_EMBEDDING_TIER=\"$TIER\"" "tier"
     add_to_rc "$ZSHRC" "export ARN_AGENT_ID=\"default\"" "agentid"
-    add_to_rc "$ZSHRC" "alias arn='python3 $INSTALL_DIR/arn/phase2/arn_cli.py'" "alias"
+    add_to_rc "$ZSHRC" "alias arn='python3 $INSTALL_DIR/arn_v9/scripts/arn_cli.py'" "alias"
 fi
 
 # Set for current session
@@ -145,7 +145,7 @@ if [ -n "$CLIENT" ]; then
     SETUP_ARGS="$SETUP_ARGS --client $CLIENT"
 fi
 
-python3 "$INSTALL_DIR/arn/phase2/arn_cli.py" setup $SETUP_ARGS
+python3 "$INSTALL_DIR/arn_v9/scripts/arn_cli.py" setup $SETUP_ARGS
 
 # ─── Final message ───
 echo ""

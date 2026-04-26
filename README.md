@@ -38,37 +38,6 @@ Plus 40/40 on the main test suite.
 
 ## Quick start
 
-### Option A — One-line installer (recommended)
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/tuuhe99-del/arn-v9/main/install.sh | bash
-```
-
-Or download and run locally:
-
-```bash
-git clone https://github.com/tuuhe99-del/arn-v9.git ~/arn_v9
-bash ~/arn_v9/install.sh
-```
-
-The installer:
-- checks Python 3.10+
-- installs pip dependencies
-- sets up shell aliases (`arn` and `arn-cli`)
-- starts the daemon (eliminates ~10s cold-start, keeps model hot)
-- installs the OpenClaw skill if OpenClaw is detected
-- runs the test suite to verify everything works
-
-**Options:**
-```bash
-bash install.sh --dir /custom/path      # install somewhere else
-bash install.sh --no-daemon             # skip daemon setup
-bash install.sh --no-openclaw         # skip OpenClaw skill
-bash install.sh --skip-tests            # faster install, skip tests
-```
-
-### Option B — Manual install
-
 ```bash
 pip install sentence-transformers numpy
 git clone https://github.com/tuuhe99-del/arn-v9.git
@@ -229,77 +198,6 @@ If you fit the free tier, just use it. Keep the LICENSE file in your fork and yo
 If your company is over the threshold and you want to use this in a product, open an issue titled "Commercial licensing inquiry" or reach me through my GitHub profile. See [COMMERCIAL.md](./COMMERCIAL.md) for details.
 
 I picked this instead of MIT because I'm a student and this project took a lot of work. If it's useful to you personally, I want you to have it free. If a corporation is making money off it, I'd like a share of that. The PolyForm license is written by actual lawyers and is used by other projects for this same reason.
-
-## Connecting ARN to Claude / OpenClaw
-
-This is the part most people struggle with, so here's the exact steps:
-
-### With OpenClaw
-
-The installer handles this automatically if OpenClaw is already set up. It copies `SKILL.md` into your skills directory. Once installed:
-
-1. The `arn-memory` skill loads automatically when your agent starts
-2. Your agent can call `arn recall` / `arn store` from any session
-3. The daemon keeps the embedding model hot — 0.5s recall instead of 10s
-
-Manual install if the auto-detection missed it:
-```bash
-mkdir -p ~/.openclaw/workspace/skills/arn-memory
-cp ~/arn_v9/arn_v9/openclaw_skill/SKILL.md ~/.ocplatform/workspace/skills/arn-memory/
-```
-
-### With any Claude setup (Claude.ai, Claude Code, custom)
-
-Paste this into your system prompt or `AGENTS.md`:
-
-```
-You have persistent memory via ARN v9.
-
-To store a fact:
-  python3 ~/arn_v9/arn_client.py store "<fact>" --importance 0.8
-
-To recall by meaning:
-  python3 ~/arn_v9/arn_client.py recall "<question>"
-
-To get context for a topic:
-  python3 ~/arn_v9/arn_client.py context "<topic>"
-
-Store facts when the user shares preferences, makes decisions, or tells you something worth remembering.
-Recall before answering anything where past context might matter.
-```
-
-### With LangChain
-
-```python
-from arn_v9 import ARNv9
-
-arn = ARNv9(data_dir="~/.arn_data/default")
-
-# In your tool definition:
-def remember(fact: str):
-    """Store something worth remembering about this user."""
-    arn.perceive(fact, importance=0.7)
-
-def recall(query: str) -> str:
-    """Recall relevant context before answering."""
-    hits = arn.recall(query, top_k=3)
-    return "\n".join(h["content"] for h in hits)
-```
-
-### Troubleshooting
-
-**"No module named arn_v9"** → run `pip install -e ~/arn_v9` again
-
-**Recall takes 10+ seconds** → daemon isn't running. Start it:
-```bash
-python3 ~/arn_v9/arn_daemon.py start &
-```
-
-**Daemon ping fails** → embedding model is still loading (first run downloads ~22MB). Wait 30s and retry.
-
-**Nothing being recalled** → check you stored something first: `arn stats` shows episode count
-
----
 
 ## About
 

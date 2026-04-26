@@ -87,28 +87,6 @@ MODEL_CONFIGS = {
         'low_conf_threshold': 0.78,
         'high_conf_threshold': 0.85,
     },
-    # Large tier — high-end desktop / server / GPU machine
-    # ~1.3GB RAM, significantly better semantic understanding
-    'large': {
-        'name': 'BAAI/bge-large-en-v1.5',
-        'dim': 1024,
-        'query_prefix': 'Represent this sentence for searching relevant passages: ',
-        'passage_prefix': '',
-        'approx_ram_mb': 1300,
-        'low_conf_threshold': 0.55,
-        'high_conf_threshold': 0.68,
-    },
-    # XL tier — GPU strongly recommended, best available quality
-    # ~2.5GB RAM (CPU) or VRAM (GPU), MTEB top-tier
-    'xl': {
-        'name': 'intfloat/e5-mistral-7b-instruct',
-        'dim': 4096,
-        'query_prefix': 'Instruct: Retrieve semantically similar text\nQuery: ',
-        'passage_prefix': '',
-        'approx_ram_mb': 2500,  # fp16; 14GB+ for full fp32
-        'low_conf_threshold': 0.50,
-        'high_conf_threshold': 0.65,
-    },
 }
 
 # Default tier — can be overridden via env or parameter

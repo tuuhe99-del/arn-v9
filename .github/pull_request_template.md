@@ -12,8 +12,8 @@ A quick summary of the approach. If there's something tricky, call it out here.
 
 ## Testing
 
-- [ ] Ran `python tests/test_all.py` and it passes
-- [ ] Ran `python -m pytest tests/ -v  # or: python arn/benchmarks/stress_test.py nano` (if the change touches memory behavior)
+- [ ] Ran `python arn_v9/tests/test_all.py` and it passes
+- [ ] Ran `python arn_v9/benchmarks/stress_test.py nano` (if the change touches memory behavior)
 - [ ] Added new tests for the new behavior (if applicable)
 
 ## Anything else

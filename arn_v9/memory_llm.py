@@ -21,7 +21,7 @@ Works with any LLM that accepts an OpenAI-compatible chat format:
 - Custom callback function
 
 Usage:
-    from arn.memory_llm import MemoryAugmentedLLM
+    from arn_v9.memory_llm import MemoryAugmentedLLM
 
     # With Ollama
     llm = MemoryAugmentedLLM(

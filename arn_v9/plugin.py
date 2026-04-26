@@ -8,7 +8,7 @@ This replaces AGENTS.md and MEMORY.md with a live, brain-inspired
 memory system that learns, consolidates, and recalls adaptively.
 
 Usage in OpenClaw:
-    from arn.plugin import ARNPlugin
+    from arn_v9.plugin import ARNPlugin
     
     plugin = ARNPlugin(agent_id="agent_001", data_root="./memory")
     

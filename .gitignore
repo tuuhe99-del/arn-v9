@@ -1,30 +1,60 @@
+# Python
 __pycache__/
 *.py[cod]
-*.egg-info/
-dist/
+*$py.class
+*.so
+.Python
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
 .eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
 *.egg
-.env
-*.env
-.venv/
+MANIFEST
+
+# Virtual environments
 venv/
 env/
-
-# ARN data — never commit memory files
-*.db
-*.db-wal
-*.db-shm
-*.npy
-*.memmap
-.arn_data/
-
-# Test artifacts
-/tmp/
-.pytest_cache/
-*.log
+ENV/
+.venv/
 
 # IDE
 .vscode/
 .idea/
 *.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ARN data (user memory, don't commit)
+arn_data/
+.arn_data/
+*.db
+*.db-wal
+*.db-shm
+*.npy
+
+# Model cache
+.cache/
+huggingface/
+
+# Logs
+*.log
+
+# OS
+Thumbs.db

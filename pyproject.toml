@@ -3,23 +3,25 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "arn"
-version = "1.0.0"
-description = "Brain-inspired persistent memory for AI agents. Local, free, Pi-compatible."
+name = "arn-v9"
+version = "9.0.0"
+description = "Brain-inspired persistent memory for AI agents. Runs locally, costs nothing, fits on a Raspberry Pi."
 readme = "README.md"
 license = {file = "LICENSE.md"}
 authors = [
     {name = "Mohamed Mohamed"}
 ]
-keywords = ["ai", "agents", "memory", "embeddings", "cognitive", "neuroscience", "ocplatform", "langchain", "rag", "local"]
+keywords = ["ai", "agents", "memory", "embeddings", "cognitive", "neuroscience", "openclaw", "rag"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "License :: Other/Proprietary License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 requires-python = ">=3.10"
 dependencies = [
@@ -33,9 +35,6 @@ api = [
     "uvicorn>=0.20.0",
     "pydantic>=2.0.0",
 ]
-langchain = [
-    "langchain>=0.1.0",
-]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
@@ -46,11 +45,10 @@ Homepage = "https://github.com/tuuhe99-del/arn-v9"
 Issues = "https://github.com/tuuhe99-del/arn-v9/issues"
 
 [project.scripts]
-arn = "arn.phase2.arn_cli:main"
+arn-cli = "arn_v9.scripts.arn_cli:main"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["arn*"]
+[tool.setuptools]
+packages = ["arn_v9", "arn_v9.core", "arn_v9.storage", "arn_v9.api", "arn_v9.scripts", "arn_v9.tests", "arn_v9.benchmarks"]
 
 [tool.setuptools.package-data]
-arn = ["openclaw_skill/SKILL.md"]
+arn_v9 = ["openclaw_skill/SKILL.md", "Dockerfile", "requirements.txt"]

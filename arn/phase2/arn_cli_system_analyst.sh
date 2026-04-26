@@ -1,4 +1,0 @@
-#!/bin/bash
-export OPENCLAW_AGENT_ID="system-analyst"
-export PYTHONPATH="/home/mokali/arn_v9:$PYTHONPATH"
-exec python3 /home/mokali/arn_v9/arn/phase2/arn_cli.py "$@"

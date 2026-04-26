@@ -18,13 +18,13 @@ Multi-tenancy:
 
 Deployment:
     # Local/Pi:
-    uvicorn arn.api.server:app --host 0.0.0.0 --port 8742
+    uvicorn arn_v9.api.server:app --host 0.0.0.0 --port 8742
 
     # Docker:
     docker run -p 8742:8742 -v arn_data:/data arn-v9-api
 
     # Production (with workers):
-    uvicorn arn.api.server:app --host 0.0.0.0 --port 8742 --workers 1
+    uvicorn arn_v9.api.server:app --host 0.0.0.0 --port 8742 --workers 1
     # NOTE: workers=1 because the embedding model is ~90MB per process.
     # For higher throughput, put a reverse proxy in front and scale
     # horizontally with separate containers per worker.
@@ -46,9 +46,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+# Ensure arn_v9 is importable
+_api_dir = os.path.dirname(os.path.abspath(__file__))
+_package_root = os.path.dirname(os.path.dirname(_api_dir))
+sys.path.insert(0, _package_root)
 
-
-from arn.plugin import ARNPlugin
+from arn_v9.plugin import ARNPlugin
 
 logger = logging.getLogger("arn.api")
 
@@ -272,7 +275,7 @@ async def lifespan(app: FastAPI):
     # Fail fast: verify the embedding model loads before accepting requests.
     # A degraded ARN (hash vectors) is worse than no ARN — it returns
     # confident-looking garbage. Better to refuse to start.
-    from arn.core.embeddings import EmbeddingEngine
+    from arn_v9.core.embeddings import EmbeddingEngine
     _test_engine = EmbeddingEngine(use_model=True)
     if _test_engine.is_degraded:
         logger.critical(
@@ -297,9 +300,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="ARN API",
-    description="Brain-inspired persistent memory for AI agents. Local, free, Pi-compatible.",
-    version="1.0.0",
+    title="ARN v9 API",
+    description="Brain-inspired cognitive memory for AI agents",
+    version="9.0.0",
     lifespan=lifespan,
 )
 
@@ -352,7 +355,7 @@ async def health():
     
     return HealthResponse(
         status=status,
-        version="1.0.0",
+        version="9.0.0",
         uptime_seconds=round(time.time() - start_time, 1),
         agents_loaded=pool.loaded_count if pool else 0,
         data_root=DATA_ROOT,
@@ -528,7 +531,7 @@ if __name__ == "__main__":
     import uvicorn
     logging.basicConfig(level=logging.INFO)
     uvicorn.run(
-        "arn.api.server:app",
+        "arn_v9.api.server:app",
         host="0.0.0.0",
         port=8742,
         reload=False,
