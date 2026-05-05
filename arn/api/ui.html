@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>ARN Memory</title>
+<style>
+/* ── Reset & base ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:       #f4f5f7;
+  --surface:  #ffffff;
+  --border:   #e2e4e9;
+  --text:     #1a1d23;
+  --muted:    #6b7280;
+  --accent:   #4f46e5;
+  --accent2:  #4338ca;
+  --danger:   #dc2626;
+  --danger2:  #b91c1c;
+  --success:  #16a34a;
+  --ep-bg:    #eff6ff;
+  --ep-fg:    #1d4ed8;
+  --sem-bg:   #faf5ff;
+  --sem-fg:   #7c3aed;
+  --radius:   10px;
+  --shadow:   0 1px 4px rgba(0,0,0,0.08);
+}
+body { font-family: system-ui,-apple-system,sans-serif; background: var(--bg);
+       color: var(--text); min-height: 100dvh; }
+
+/* ── Login screen ─────────────────────────────────────────── */
+#login-screen {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; min-height: 100dvh; padding: 24px;
+}
+.login-box {
+  background: var(--surface); border-radius: var(--radius);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.10); padding: 36px 32px;
+  width: 100%; max-width: 360px;
+}
+.login-logo { text-align: center; margin-bottom: 24px; }
+.login-logo h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.03em;
+                  color: var(--accent); }
+.login-logo p  { color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
+.login-box label { display: block; font-size: 0.82rem; font-weight: 600;
+                    color: var(--muted); margin-bottom: 5px; text-transform: uppercase;
+                    letter-spacing: 0.05em; }
+.login-box input { width: 100%; border: 1.5px solid var(--border); border-radius: 7px;
+                    padding: 10px 12px; font-size: 0.95rem; outline: none;
+                    transition: border 0.15s; margin-bottom: 12px; }
+.login-box input:focus { border-color: var(--accent); }
+.login-box .btn-primary { width: 100%; margin-top: 4px; }
+.login-error { color: var(--danger); font-size: 0.85rem;
+               margin-top: 8px; text-align: center; display: none; }
+.login-hint { color: var(--muted); font-size: 0.8rem; text-align: center;
+              margin-top: 14px; line-height: 1.5; }
+
+/* ── Onboarding overlay ───────────────────────────────────── */
+#onboard-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  z-index: 100; align-items: center; justify-content: center; padding: 24px;
+}
+#onboard-overlay.show { display: flex; }
+.onboard-card {
+  background: var(--surface); border-radius: var(--radius); max-width: 480px;
+  width: 100%; padding: 32px; box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+.onboard-card h2 { font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; }
+.onboard-card .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 20px; }
+.onboard-steps { display: grid; gap: 12px; margin-bottom: 24px; }
+.onboard-step { display: flex; gap: 12px; align-items: flex-start; }
+.step-num {
+  background: var(--accent); color: white; border-radius: 50%;
+  width: 26px; height: 26px; flex-shrink: 0; display: flex;
+  align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700;
+}
+.step-body strong { display: block; font-size: 0.9rem; }
+.step-body span   { font-size: 0.82rem; color: var(--muted); }
+
+/* ── Update banner ────────────────────────────────────────── */
+#update-banner {
+  display: none; background: #fef9c3; border-bottom: 1px solid #fde047;
+  padding: 8px 16px; text-align: center; font-size: 0.85rem;
+}
+#update-banner a { color: var(--accent); font-weight: 600; text-decoration: none; }
+#update-banner.show { display: block; }
+
+/* ── App shell ────────────────────────────────────────────── */
+#app { display: none; flex-direction: column; min-height: 100dvh; }
+#app.show { display: flex; }
+
+header {
+  background: #1a1d2e; color: white; padding: 0 20px;
+  display: flex; align-items: center; gap: 12px; height: 52px;
+  position: sticky; top: 0; z-index: 50; flex-shrink: 0;
+}
+header .logo { font-weight: 800; font-size: 1.1rem; letter-spacing: -0.02em; }
+.badge { background: var(--accent); padding: 1px 8px; border-radius: 10px;
+         font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em; }
+.hdr-status { margin-left: auto; font-size: 0.78rem; opacity: 0.7; }
+.hdr-status.ok::before  { content: "● "; color: #4ade80; }
+.hdr-status.err::before { content: "● "; color: #f87171; }
+.hdr-agent { font-size: 0.78rem; color: #a5b4fc; }
+.hdr-logout { background: transparent; border: 1px solid rgba(255,255,255,0.25);
+              color: white; border-radius: 6px; padding: 4px 10px;
+              font-size: 0.78rem; cursor: pointer; }
+.hdr-logout:hover { background: rgba(255,255,255,0.1); }
+
+/* ── Nav tabs (mobile bottom, desktop top) ────────────────── */
+nav {
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  display: flex; overflow-x: auto; scrollbar-width: none;
+}
+nav::-webkit-scrollbar { display: none; }
+.nav-tab {
+  padding: 12px 18px; font-size: 0.85rem; font-weight: 500; cursor: pointer;
+  border-bottom: 2px solid transparent; white-space: nowrap; color: var(--muted);
+  transition: color 0.15s, border-color 0.15s;
+}
+.nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.nav-tab:hover:not(.active) { color: var(--text); }
+
+/* ── Main content ─────────────────────────────────────────── */
+.content { flex: 1; overflow-y: auto; padding: 16px; max-width: 800px;
+           width: 100%; margin: 0 auto; }
+.tab-panel { display: none; }
+.tab-panel.active { display: grid; gap: 14px; }
+
+/* ── Cards ────────────────────────────────────────────────── */
+.card { background: var(--surface); border-radius: var(--radius);
+        padding: 18px; box-shadow: var(--shadow); }
+.card-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+              color: var(--muted); margin-bottom: 12px; font-weight: 600; }
+
+/* ── Form elements ────────────────────────────────────────── */
+.field { display: grid; gap: 5px; }
+.field label { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
+input[type=text], input[type=number], select, textarea {
+  border: 1.5px solid var(--border); border-radius: 7px;
+  padding: 9px 11px; font-size: 0.9rem; outline: none;
+  transition: border 0.15s; width: 100%; background: var(--surface);
+  color: var(--text);
+}
+input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+textarea { resize: vertical; min-height: 80px; font-family: inherit; }
+
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.row input[type=text] { flex: 1; min-width: 0; }
+.row select { flex-shrink: 0; }
+
+/* ── Buttons ──────────────────────────────────────────────── */
+.btn-primary, button.primary {
+  background: var(--accent); color: white; border: none; border-radius: 7px;
+  padding: 9px 18px; font-size: 0.9rem; font-weight: 500; cursor: pointer;
+  transition: background 0.15s; white-space: nowrap;
+}
+.btn-primary:hover { background: var(--accent2); }
+.btn-danger  { background: var(--danger); color: white; border: none;
+               border-radius: 7px; padding: 9px 18px; font-size: 0.9rem;
+               cursor: pointer; transition: background 0.15s; }
+.btn-danger:hover { background: var(--danger2); }
+.btn-ghost   { background: transparent; border: 1.5px solid var(--border);
+               border-radius: 7px; padding: 7px 14px; font-size: 0.85rem;
+               cursor: pointer; color: var(--text); transition: border-color 0.15s; }
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn-sm { padding: 5px 10px; font-size: 0.78rem; }
+
+/* ── Importance slider ────────────────────────────────────── */
+.imp-row { display: flex; align-items: center; gap: 10px; }
+.imp-row label { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
+input[type=range] { flex: 1; accent-color: var(--accent); }
+.imp-val { font-size: 0.85rem; font-weight: 700; min-width: 28px;
+           text-align: right; color: var(--accent); }
+
+/* ── Alerts ───────────────────────────────────────────────── */
+.alert { padding: 10px 14px; border-radius: 7px; font-size: 0.85rem;
+         display: none; margin-top: 6px; }
+.alert.show { display: block; }
+.alert.ok  { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+.alert.err { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+
+/* ── Result box ───────────────────────────────────────────── */
+.result-box {
+  background: #f9fafb; border: 1.5px solid var(--border); border-radius: 8px;
+  padding: 12px; font-size: 0.85rem; white-space: pre-wrap;
+  max-height: 260px; overflow-y: auto; display: none; line-height: 1.55;
+}
+.result-box.show { display: block; }
+
+/* ── Stats grid ───────────────────────────────────────────── */
+.stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+@media (min-width: 480px) { .stats-grid { grid-template-columns: repeat(4, 1fr); } }
+.stat-box { background: #f9fafb; border-radius: 8px; padding: 14px;
+            text-align: center; border: 1.5px solid var(--border); }
+.stat-val { font-size: 1.55rem; font-weight: 800; color: var(--accent); line-height: 1; }
+.stat-lbl { font-size: 0.72rem; color: var(--muted); margin-top: 5px;
+            text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* ── Memory list ──────────────────────────────────────────── */
+.mem-list { display: grid; gap: 8px; }
+.mem-item {
+  border: 1.5px solid var(--border); border-radius: 8px; padding: 12px;
+  display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: start;
+  transition: border-color 0.15s;
+}
+.mem-item:hover { border-color: var(--accent); }
+.mem-content { font-size: 0.88rem; line-height: 1.45; word-break: break-word; }
+.mem-meta { font-size: 0.72rem; color: var(--muted); margin-top: 5px; }
+.mem-badge { font-size: 0.68rem; padding: 2px 7px; border-radius: 10px;
+             font-weight: 600; white-space: nowrap; }
+.mem-badge.episodic { background: var(--ep-bg); color: var(--ep-fg); }
+.mem-badge.semantic  { background: var(--sem-bg); color: var(--sem-fg); }
+.mem-actions { display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
+.empty { text-align: center; color: var(--muted); padding: 40px 16px;
+         font-size: 0.9rem; }
+
+/* ── Settings ─────────────────────────────────────────────── */
+.settings-group { display: grid; gap: 10px; }
+.setting-row { display: flex; align-items: center; justify-content: space-between;
+               gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.setting-row:last-child { border-bottom: none; }
+.setting-label strong { display: block; font-size: 0.9rem; }
+.setting-label span { font-size: 0.8rem; color: var(--muted); }
+
+/* ── Mobile nav (bottom) ──────────────────────────────────── */
+@media (max-width: 600px) {
+  nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+        border-top: 1px solid var(--border); border-bottom: none;
+        justify-content: space-around; background: var(--surface); }
+  .nav-tab { flex: 1; text-align: center; padding: 10px 4px;
+             border-bottom: none; border-top: 2px solid transparent;
+             font-size: 0.72rem; }
+  .nav-tab.active { border-top-color: var(--accent); border-bottom: none; }
+  .content { padding-bottom: 70px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN SCREEN ─────────────────────────────────────── -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">
+      <h1>ARN</h1>
+      <p>Local semantic memory</p>
+    </div>
+    <div class="field">
+      <label for="login-agent">Agent ID</label>
+      <input type="text" id="login-agent" value="default" placeholder="default"
+             autocomplete="off" spellcheck="false">
+    </div>
+    <div class="field" id="key-field">
+      <label for="login-key">API Key</label>
+      <input type="password" id="login-key" placeholder="your ARN_API_KEY"
+             onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn-primary" onclick="doLogin()">Connect</button>
+    <div class="login-error" id="login-error"></div>
+    <p class="login-hint">
+      Start server:<br>
+      <code>ARN_API_KEY=secret arn-server</code><br>
+      then connect with that key.
+    </p>
+  </div>
+</div>
+
+<!-- ── ONBOARDING ───────────────────────────────────────── -->
+<div id="onboard-overlay">
+  <div class="onboard-card">
+    <h2>👋 Welcome to ARN</h2>
+    <p class="subtitle">No memories stored yet. Here's how ARN works:</p>
+    <div class="onboard-steps">
+      <div class="onboard-step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>Store memories</strong>
+          <span>Type anything you want ARN to remember — preferences, decisions, facts.</span>
+        </div>
+      </div>
+      <div class="onboard-step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>Recall by meaning</strong>
+          <span>Ask a question in plain language — ARN finds relevant memories semantically, not just by keyword.</span>
+        </div>
+      </div>
+      <div class="onboard-step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>Everything stays local</strong>
+          <span>All data lives on your machine in <code>~/.arn_data</code>. Nothing is sent anywhere.</span>
+        </div>
+      </div>
+    </div>
+    <button class="btn-primary" style="width:100%" onclick="dismissOnboard()">
+      Get started
+    </button>
+  </div>
+</div>
+
+<!-- ── UPDATE BANNER ────────────────────────────────────── -->
+<div id="update-banner">
+  ⚡ Update available: <span id="latest-ver"></span> —
+  <a href="#" target="_blank" rel="noopener">
+    Download
+  </a>
+  &nbsp;·&nbsp;
+  <a href="#" onclick="document.getElementById('update-banner').classList.remove('show');return false">
+    Dismiss
+  </a>
+</div>
+
+<!-- ── APP ──────────────────────────────────────────────── -->
+<div id="app">
+  <header>
+    <span class="logo">ARN</span>
+    <span class="badge">MEMORY</span>
+    <span class="hdr-agent" id="hdr-agent"></span>
+    <span class="hdr-status" id="hdr-status">connecting…</span>
+    <button class="hdr-logout" onclick="logout()">Sign out</button>
+  </header>
+
+  <nav id="main-nav">
+    <div class="nav-tab active" data-tab="store"   onclick="switchTab('store')">Store</div>
+    <div class="nav-tab"        data-tab="recall"  onclick="switchTab('recall')">Recall</div>
+    <div class="nav-tab"        data-tab="human"   onclick="switchTab('human')">Human</div>
+    <div class="nav-tab"        data-tab="browse"  onclick="switchTab('browse')">Browse</div>
+    <div class="nav-tab"        data-tab="overview"onclick="switchTab('overview')">Overview</div>
+    <div class="nav-tab"        data-tab="settings"onclick="switchTab('settings')">Settings</div>
+  </nav>
+
+  <div class="content">
+
+    <!-- STORE -->
+    <div class="tab-panel active" id="tab-store">
+      <div class="card">
+        <div class="card-title">Store a memory</div>
+        <div style="display:grid;gap:10px">
+          <textarea id="s-content" placeholder="What should ARN remember?"></textarea>
+          <div class="row">
+            <select id="s-type">
+              <option value="episode">episode</option>
+              <option value="fact">fact</option>
+              <option value="preference">preference</option>
+              <option value="identity">identity</option>
+              <option value="rule">rule</option>
+              <option value="procedure">procedure</option>
+              <option value="error">error</option>
+              <option value="lesson">lesson</option>
+              <option value="task">task</option>
+              <option value="decision">decision</option>
+            </select>
+            <select id="s-priority">
+              <option value="normal">normal</option>
+              <option value="low">low</option>
+              <option value="high">high</option>
+              <option value="critical">critical</option>
+            </select>
+            <input type="text" id="s-scope" placeholder="scope, e.g. global or agent:developer" value="global">
+          </div>
+          <div class="imp-row">
+            <label>Importance</label>
+            <input type="range" id="s-imp" min="0" max="1" step="0.05" value="0.5"
+                   oninput="document.getElementById('s-imp-val').textContent=
+                            parseFloat(this.value).toFixed(2)">
+            <span class="imp-val" id="s-imp-val">0.50</span>
+          </div>
+          <div class="row">
+            <input type="text" id="s-tags" placeholder="tags, comma-separated">
+            <select id="s-ctx">
+              <option value="current">current</option>
+              <option value="past">past</option>
+              <option value="future">future</option>
+              <option value="timeless">timeless</option>
+            </select>
+            <button class="btn-primary" onclick="storeMemory()">Store</button>
+          </div>
+          <div class="alert" id="s-alert"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RECALL -->
+    <div class="tab-panel" id="tab-recall">
+      <div class="card">
+        <div class="card-title">Semantic recall</div>
+        <div style="display:grid;gap:10px">
+          <div class="row">
+            <input type="text" id="r-query"
+                   placeholder="Ask a question in plain language…"
+                   onkeydown="if(event.key==='Enter')recall()">
+            <button class="btn-primary" onclick="recall()">Recall</button>
+            <button class="btn-ghost" onclick="keySearch()">Keyword</button>
+          </div>
+          <div class="result-box" id="r-result"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HUMAN MEMORY CORE -->
+    <div class="tab-panel" id="tab-human">
+      <div class="card">
+        <div class="card-title">Identity</div>
+        <div style="display:grid;gap:10px">
+          <div class="row">
+            <input type="text" id="h-agent" placeholder="target agent, e.g. developer" value="developer">
+            <input type="text" id="h-name" placeholder="name, e.g. Koda">
+          </div>
+          <input type="text" id="h-role" placeholder="role, e.g. coding, debugging, tests">
+          <textarea id="h-must" placeholder="must rules, one per line"></textarea>
+          <textarea id="h-mustnot" placeholder="must-not rules, one per line"></textarea>
+          <div class="row">
+            <button class="btn-primary" onclick="setIdentity()">Save Identity</button>
+            <button class="btn-ghost" onclick="showIdentity()">Show Identity</button>
+          </div>
+          <div class="alert" id="h-identity-alert"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Rules</div>
+        <div style="display:grid;gap:10px">
+          <div class="row">
+            <input type="text" id="h-rule" placeholder="rule text">
+            <select id="h-rule-priority">
+              <option value="high">high</option>
+              <option value="critical">critical</option>
+              <option value="normal">normal</option>
+              <option value="low">low</option>
+            </select>
+            <button class="btn-primary" onclick="addRule()">Add Rule</button>
+            <button class="btn-ghost" onclick="listRules()">List</button>
+          </div>
+          <div class="alert" id="h-rule-alert"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Procedure</div>
+        <div style="display:grid;gap:10px">
+          <input type="text" id="h-proc-name" placeholder="procedure name, e.g. release-audit">
+          <textarea id="h-proc-steps" placeholder="steps, one per line"></textarea>
+          <input type="text" id="h-proc-success" placeholder="success criteria">
+          <button class="btn-primary" onclick="addProcedure()">Add Procedure</button>
+          <div class="alert" id="h-proc-alert"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Error / Lesson</div>
+        <div style="display:grid;gap:10px">
+          <input type="text" id="h-error-task" placeholder="task, optional">
+          <textarea id="h-error-mistake" placeholder="mistake"></textarea>
+          <textarea id="h-error-fix" placeholder="fix"></textarea>
+          <textarea id="h-error-lesson" placeholder="lesson"></textarea>
+          <button class="btn-primary" onclick="addErrorLesson()">Add Error Lesson</button>
+          <div class="alert" id="h-error-alert"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Context packet</div>
+        <div style="display:grid;gap:10px">
+          <input type="text" id="h-context-task" placeholder="current task">
+          <input type="text" id="h-context-query" placeholder="query, e.g. what should I do next?">
+          <button class="btn-primary" onclick="contextPacket()">Build Context</button>
+          <div class="result-box" id="h-result"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BROWSE -->
+    <div class="tab-panel" id="tab-browse">
+      <div class="card">
+        <div class="card-title">
+          All memories
+          <span style="float:right;display:flex;gap:6px">
+            <button class="btn-ghost btn-sm" onclick="loadBrowse()">Refresh</button>
+            <button class="btn-danger btn-sm" onclick="forgetAll()">Forget all</button>
+          </span>
+        </div>
+        <div style="margin-bottom:10px">
+          <input type="text" id="b-filter" placeholder="Filter…"
+                 oninput="filterBrowse(this.value)" style="max-width:260px">
+        </div>
+        <div class="mem-list" id="b-list">
+          <div class="empty">Loading…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OVERVIEW -->
+    <div class="tab-panel" id="tab-overview">
+      <div class="card">
+        <div class="card-title">
+          Stats
+          <button class="btn-ghost btn-sm" style="float:right"
+                  onclick="loadStats()">Refresh</button>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-val" id="ov-ep">—</div>
+            <div class="stat-lbl">Episodes</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val" id="ov-sem">—</div>
+            <div class="stat-lbl">Concepts</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val" id="ov-mb">—</div>
+            <div class="stat-lbl">MB used</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val" id="ov-hit">—</div>
+            <div class="stat-lbl">Cache hit</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Server</div>
+        <div style="font-size:0.85rem;display:grid;gap:6px;color:var(--muted)" id="ov-server">
+          Loading…
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="tab-panel" id="tab-settings">
+      <div class="card">
+        <div class="card-title">Connection</div>
+        <div class="settings-group">
+          <div class="setting-row">
+            <div class="setting-label">
+              <strong>Agent ID</strong>
+              <span id="set-agent-id">—</span>
+            </div>
+            <button class="btn-ghost btn-sm" onclick="logout()">Switch</button>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">
+              <strong>Server</strong>
+              <span id="set-server">localhost:8742</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">
+              <strong>ARN Version</strong>
+              <span id="set-version">—</span>
+            </div>
+            <button class="btn-ghost btn-sm" onclick="checkUpdate()">Check for update</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Data</div>
+        <div class="settings-group">
+          <div class="setting-row">
+            <div class="setting-label">
+              <strong>Export memories</strong>
+              <span>Download all memories as JSON</span>
+            </div>
+            <button class="btn-ghost btn-sm" onclick="exportMemories()">Export</button>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">
+              <strong>Trigger backup</strong>
+              <span>Run an immediate server backup</span>
+            </div>
+            <button class="btn-ghost btn-sm" onclick="triggerBackup()">Backup now</button>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">
+              <strong>Forget everything</strong>
+              <span>Permanently delete all memories for this agent</span>
+            </div>
+            <button class="btn-danger btn-sm" onclick="forgetAll()">Forget all</button>
+          </div>
+        </div>
+      </div>
+      <div class="alert" id="set-alert" style="margin-top:0"></div>
+    </div>
+
+  </div><!-- .content -->
+</div><!-- #app -->
+
+<script>
+// ── State ────────────────────────────────────────────────────
+let AGENT = '', KEY = '', allMemories = [];
+
+// ── Auth ─────────────────────────────────────────────────────
+async function doLogin() {
+  const agent = document.getElementById('login-agent').value.trim() || 'default';
+  const key   = document.getElementById('login-key').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+
+  // Quick connectivity + auth check
+  try {
+    const r = await fetch('/v1/health', {
+      headers: key ? { 'X-API-Key': key } : {}
+    });
+    if (r.status === 401) throw new Error('Invalid API key.');
+    if (!r.ok)            throw new Error(`Server error ${r.status}`);
+  } catch (e) {
+    errEl.textContent = e.message || 'Cannot reach ARN server.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  AGENT = agent; KEY = key;
+  sessionStorage.setItem('arn_agent', AGENT);
+  sessionStorage.setItem('arn_key',   KEY);
+
+  showApp();
+}
+
+function logout() {
+  sessionStorage.removeItem('arn_agent');
+  sessionStorage.removeItem('arn_key');
+  AGENT = ''; KEY = '';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').classList.remove('show');
+}
+
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').classList.add('show');
+  document.getElementById('hdr-agent').textContent = AGENT;
+  document.getElementById('set-agent-id').textContent = AGENT;
+  boot();
+}
+
+// ── API helper ───────────────────────────────────────────────
+async function api(path, opts = {}) {
+  const h = { 'Content-Type': 'application/json' };
+  if (KEY) h['X-API-Key'] = KEY;
+  const r = await fetch(path, { headers: h, ...opts });
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  return r.json();
+}
+
+// ── Boot ─────────────────────────────────────────────────────
+async function boot() {
+  await Promise.all([loadStats(), loadBrowse(), loadVersion()]);
+  checkUpdate();
+}
+
+// ── Tab switching ─────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.nav-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-panel').forEach(p =>
+    p.classList.toggle('active', p.id === 'tab-' + name));
+  if (name === 'browse')   loadBrowse();
+  if (name === 'overview') loadStats();
+}
+
+// ── Status indicator ─────────────────────────────────────────
+function setStatus(ok) {
+  const el = document.getElementById('hdr-status');
+  el.textContent = ok ? 'connected' : 'offline';
+  el.className = 'hdr-status ' + (ok ? 'ok' : 'err');
+}
+
+// ── Alert helper ──────────────────────────────────────────────
+function showAlert(id, msg, ok) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.className = 'alert show ' + (ok ? 'ok' : 'err');
+  setTimeout(() => { el.className = 'alert'; }, 3500);
+}
+
+// ── Store ─────────────────────────────────────────────────────
+async function storeMemory() {
+  const content = document.getElementById('s-content').value.trim();
+  if (!content) return;
+  try {
+    await api('/v1/memory/store', {
+      method: 'POST',
+      body: JSON.stringify({
+        agent_id: AGENT,
+        content,
+        importance: parseFloat(document.getElementById('s-imp').value),
+        tags: document.getElementById('s-tags').value
+              .split(',').map(t => t.trim()).filter(Boolean),
+        time_context: document.getElementById('s-ctx').value,
+        memory_type: document.getElementById('s-type').value,
+        priority: document.getElementById('s-priority').value,
+        scope: document.getElementById('s-scope').value || 'global',
+        context: {},
+      })
+    });
+    document.getElementById('s-content').value = '';
+    showAlert('s-alert', '✓ Stored', true);
+    loadBrowse();
+    loadStats();
+  } catch (e) { showAlert('s-alert', 'Error: ' + e.message, false); }
+}
+
+// ── Recall ────────────────────────────────────────────────────
+async function recall() {
+  const q = document.getElementById('r-query').value.trim();
+  if (!q) return;
+  const box = document.getElementById('r-result');
+  box.textContent = 'Searching…'; box.className = 'result-box show';
+  try {
+    const d = await api('/v1/memory/recall', {
+      method: 'POST',
+      body: JSON.stringify({ agent_id: AGENT, query: q, top_k: 5 })
+    });
+    if (!d.results.length) { box.textContent = 'No matching memories.'; return; }
+    box.textContent = d.results.map((r, i) =>
+      `${i+1}. [${r.type} · score ${r.score.toFixed(2)}]\n   ${r.content}`
+    ).join('\n\n');
+  } catch (e) { box.textContent = 'Error: ' + e.message; }
+}
+
+async function keySearch() {
+  const q = document.getElementById('r-query').value.trim();
+  if (!q) return;
+  const box = document.getElementById('r-result');
+  box.textContent = 'Searching…'; box.className = 'result-box show';
+  try {
+    const d = await api(`/v1/memory/search/${AGENT}?q=${encodeURIComponent(q)}&limit=20`);
+    if (!d.length) { box.textContent = 'No keyword matches.'; return; }
+    box.textContent = d.map((r, i) =>
+      `${i+1}. [id ${r.id} · ${fmtDate(r.created_at)}]\n   ${r.content}`
+    ).join('\n\n');
+  } catch (e) { box.textContent = 'Error: ' + e.message; }
+}
+
+// ── Browse ────────────────────────────────────────────────────
+async function loadBrowse() {
+  const list = document.getElementById('b-list');
+  try {
+    allMemories = await api(`/v1/memory/list/${AGENT}?limit=200`);
+    renderBrowse(allMemories);
+  } catch (e) {
+    list.innerHTML = `<div class="empty">Could not load: ${e.message}</div>`;
+  }
+}
+
+function filterBrowse(q) {
+  const needle = q.toLowerCase();
+  const filtered = needle
+    ? allMemories.filter(m => m.content.toLowerCase().includes(needle))
+    : allMemories;
+  renderBrowse(filtered);
+}
+
+function renderBrowse(memories) {
+  const list = document.getElementById('b-list');
+  if (!memories.length) {
+    list.innerHTML = '<div class="empty">No memories found.</div>';
+    // Show onboarding if completely empty and we haven't seen it
+    if (allMemories.length === 0 && !sessionStorage.getItem('arn_onboarded')) {
+      document.getElementById('onboard-overlay').classList.add('show');
+    }
+    return;
+  }
+  list.innerHTML = memories.map(m => `
+    <div class="mem-item" id="m-${m.id}">
+      <div>
+        <div class="mem-content">${esc(m.content)}</div>
+        <div class="mem-meta">
+          ${fmtDate(m.created_at)} · id=${m.id}
+          ${m.importance != null ? ' · imp=' + m.importance.toFixed(1) : ''}
+          ${m.confidence  != null ? ' · conf=' + m.confidence.toFixed(2) : ''}
+        </div>
+      </div>
+      <div class="mem-actions">
+        <span class="mem-badge ${m.type}">${m.type}</span>
+        ${m.type === 'episodic'
+          ? `<button class="btn-danger btn-sm" onclick="forget(${m.id})">Forget</button>`
+          : ''}
+      </div>
+    </div>`).join('');
+}
+
+async function forget(id) {
+  if (!confirm(`Forget memory #${id}?`)) return;
+  try {
+    await api('/v1/memory/forget', {
+      method: 'POST',
+      body: JSON.stringify({ agent_id: AGENT, episode_ids: [id] })
+    });
+    allMemories = allMemories.filter(m => m.id !== id);
+    document.getElementById(`m-${id}`)?.remove();
+    loadStats();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function forgetAll() {
+  if (!confirm('Delete ALL memories for this agent? This cannot be undone.')) return;
+  try {
+    await api('/v1/memory/forget', {
+      method: 'POST',
+      body: JSON.stringify({ agent_id: AGENT, forget_all: true })
+    });
+    allMemories = [];
+    renderBrowse([]);
+    loadStats();
+    showAlert('set-alert', '✓ All memories deleted', true);
+  } catch (e) { showAlert('set-alert', 'Error: ' + e.message, false); }
+}
+
+
+// ── Human Memory Core ─────────────────────────────────────────
+function humanAgent() {
+  return document.getElementById('h-agent').value.trim() || AGENT;
+}
+function lines(id) {
+  return document.getElementById(id).value.split('\n').map(x => x.trim()).filter(Boolean);
+}
+function showHumanResult(data) {
+  const box = document.getElementById('h-result');
+  box.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  box.className = 'result-box show';
+}
+async function setIdentity() {
+  try {
+    const d = await api('/v1/human/identity/set', { method: 'POST', body: JSON.stringify({
+      agent_id: AGENT,
+      target_agent: humanAgent(),
+      name: document.getElementById('h-name').value.trim() || null,
+      role: document.getElementById('h-role').value.trim() || null,
+      must: lines('h-must'),
+      must_not: lines('h-mustnot'),
+    })});
+    showAlert('h-identity-alert', '✓ Identity saved', true); showHumanResult(d); loadBrowse();
+  } catch(e) { showAlert('h-identity-alert', 'Error: ' + e.message, false); }
+}
+async function showIdentity() {
+  try {
+    const d = await api('/v1/human/identity/get', { method: 'POST', body: JSON.stringify({
+      agent_id: AGENT, target_agent: humanAgent()
+    })});
+    showHumanResult(d);
+  } catch(e) { showHumanResult('Error: ' + e.message); }
+}
+async function addRule() {
+  const rule = document.getElementById('h-rule').value.trim(); if (!rule) return;
+  try {
+    const d = await api('/v1/human/rule/add', { method: 'POST', body: JSON.stringify({
+      agent_id: AGENT, target_agent: humanAgent(), rule,
+      priority: document.getElementById('h-rule-priority').value
+    })});
+    document.getElementById('h-rule').value = '';
+    showAlert('h-rule-alert', '✓ Rule added', true); showHumanResult(d); loadBrowse();
+  } catch(e) { showAlert('h-rule-alert', 'Error: ' + e.message, false); }
+}
+async function listRules() {
+  try {
+    const d = await api('/v1/human/rule/list', { method: 'POST', body: JSON.stringify({
+      agent_id: AGENT, target_agent: humanAgent()
+    })});
+    showHumanResult(d);
+  } catch(e) { showHumanResult('Error: ' + e.message); }
+}
+async function addProcedure() {
+  const name = document.getElementById('h-proc-name').value.trim();
+  const steps = lines('h-proc-steps'); if (!name || !steps.length) return;
+  try {
+    const d = await api('/v1/human/procedure/add', { method: 'POST', body: JSON.stringify({
+      agent_id: AGENT, target_agent: humanAgent(), name, steps,
+      success: document.getElementById('h-proc-success').value.trim() || null
+    })});
+    showAlert('h-proc-alert', '✓ Procedure added', true); showHumanResult(d); loadBrowse();
+  } catch(e) { showAlert('h-proc-alert', 'Error: ' + e.message, false); }
+}
+async function addErrorLesson() {
+  const mistake = document.getElementById('h-error-mistake').value.trim(); if (!mistake) return;
+  try {
+    const d = await api('/v1/human/error/add', { method: 'POST', body: JSON.stringify({
+      agent_id: AGENT, target_agent: humanAgent(), mistake,
+      fix: document.getElementById('h-error-fix').value.trim() || null,
+      lesson: document.getElementById('h-error-lesson').value.trim() || null,
+      task: document.getElementById('h-error-task').value.trim() || null
+    })});
+    showAlert('h-error-alert', '✓ Error lesson added', true); showHumanResult(d); loadBrowse();
+  } catch(e) { showAlert('h-error-alert', 'Error: ' + e.message, false); }
+}
+async function contextPacket() {
+  const box = document.getElementById('h-result'); box.textContent = 'Building context…'; box.className = 'result-box show';
+  try {
+    const d = await api('/v1/human/context-packet', { method: 'POST', body: JSON.stringify({
+      agent_id: AGENT, target_agent: humanAgent(),
+      task: document.getElementById('h-context-task').value.trim() || null,
+      query: document.getElementById('h-context-query').value.trim() || null,
+      max_tokens: 2000
+    })});
+    box.textContent = d.context;
+  } catch(e) { box.textContent = 'Error: ' + e.message; }
+}
+
+// ── Stats / overview ──────────────────────────────────────────
+async function loadStats() {
+  try {
+    const d = await api(`/v1/memory/stats/${AGENT}`);
+    document.getElementById('ov-ep').textContent  = d.episodic_count;
+    document.getElementById('ov-sem').textContent = d.semantic_count;
+    document.getElementById('ov-mb').textContent  = d.storage_mb.toFixed(1);
+    document.getElementById('ov-hit').textContent =
+      (d.cache_hit_rate * 100).toFixed(0) + '%';
+    setStatus(true);
+  } catch { setStatus(false); }
+
+  try {
+    const h = await api('/v1/health');
+    document.getElementById('ov-server').innerHTML = [
+      row('Status',       h.status),
+      row('Uptime',       fmtUptime(h.uptime_seconds)),
+      row('Agents loaded',h.agents_loaded),
+      row('Auth',         h.auth_enabled ? 'enabled' : 'disabled'),
+      row('Data root',    h.data_root),
+    ].join('');
+  } catch {
+    document.getElementById('ov-server').textContent = 'Could not reach server.';
+  }
+}
+
+function row(k, v) {
+  return `<div style="display:flex;justify-content:space-between;gap:16px;
+                       padding:4px 0;border-bottom:1px solid var(--border)">
+            <span>${k}</span><span style="color:var(--text);font-weight:500">${v}</span>
+          </div>`;
+}
+
+// ── Version / update ──────────────────────────────────────────
+async function loadVersion() {
+  try {
+    const d = await api('/v1/version');
+    document.getElementById('set-version').textContent = d.version;
+  } catch { /* silent */ }
+}
+
+async function checkUpdate() {
+  const UPDATE_URL =
+    null;
+  try {
+    const r = await fetch(UPDATE_URL, { cache: 'no-store' });
+    if (!r.ok) return;
+    const latest = (await r.text()).trim();
+    const current = document.getElementById('set-version').textContent;
+    if (latest && latest !== current && current !== '—') {
+      document.getElementById('latest-ver').textContent = latest;
+      document.getElementById('update-banner').classList.add('show');
+    }
+  } catch { /* offline — silent */ }
+}
+
+// ── Export ────────────────────────────────────────────────────
+async function exportMemories() {
+  try {
+    const d = await api(`/v1/memory/list/${AGENT}?limit=5000`);
+    const blob = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `arn-memories-${AGENT}-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) { showAlert('set-alert', 'Export failed: ' + e.message, false); }
+}
+
+// ── Backup ────────────────────────────────────────────────────
+async function triggerBackup() {
+  try {
+    await api('/v1/backup', { method: 'POST' });
+    showAlert('set-alert', '✓ Backup complete', true);
+  } catch (e) { showAlert('set-alert', 'Backup failed: ' + e.message, false); }
+}
+
+// ── Onboarding ────────────────────────────────────────────────
+function dismissOnboard() {
+  sessionStorage.setItem('arn_onboarded', '1');
+  document.getElementById('onboard-overlay').classList.remove('show');
+}
+
+// ── Utilities ─────────────────────────────────────────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function fmtDate(ts) {
+  return new Date(ts * 1000).toLocaleString(undefined,
+    { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+function fmtUptime(s) {
+  if (s < 60)   return `${s}s`;
+  if (s < 3600) return `${Math.floor(s/60)}m`;
+  return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;
+}
+
+// ── Init ──────────────────────────────────────────────────────
+(function init() {
+  // Restore session if available
+  const a = sessionStorage.getItem('arn_agent');
+  const k = sessionStorage.getItem('arn_key');
+  if (a) {
+    document.getElementById('login-agent').value = a;
+    document.getElementById('login-key').value   = k || '';
+    AGENT = a; KEY = k || '';
+    showApp();
+  }
+  // Periodic refresh
+  setInterval(loadStats, 30000);
+})();
+</script>
+</body>
+</html>
